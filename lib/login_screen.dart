@@ -12,22 +12,22 @@ class LoginScreen extends StatefulWidget {
 }
 
 class _LoginScreenState extends State<LoginScreen> {
-  final TextEditingController _phoneController = TextEditingController();
+  final TextEditingController _idController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
 
   bool _isLoading = false;
 
   @override
   void dispose() {
-    _phoneController.dispose();
+    _idController.dispose();
     _passwordController.dispose();
     super.dispose();
   }
 
   Future<void> _login() async {
-    if (_phoneController.text.isEmpty || _passwordController.text.isEmpty) {
+    if (_idController.text.isEmpty || _passwordController.text.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('أدخلي رقم الجوال وكلمة المرور')),
+        const SnackBar(content: Text('أدخلي المعرّف وكلمة المرور')),
       );
       return;
     }
@@ -41,7 +41,7 @@ class _LoginScreenState extends State<LoginScreen> {
         Uri.parse('http://10.0.2.2/login.php'),
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({
-          'phone': _phoneController.text,
+          'id': _idController.text,
           'password': _passwordController.text,
         }),
       );
@@ -57,7 +57,7 @@ class _LoginScreenState extends State<LoginScreen> {
         );
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('رقم الجوال أو كلمة المرور غير صحيحة')),
+          const SnackBar(content: Text('المعرّف أو كلمة المرور غير صحيحة')),
         );
       }
     } catch (e) {
@@ -101,10 +101,10 @@ class _LoginScreenState extends State<LoginScreen> {
                       ),
                       const SizedBox(height: 30),
                       TextField(
-                        controller: _phoneController,
-                        keyboardType: TextInputType.phone,
+                        controller: _idController,
+                        keyboardType: TextInputType.number,
                         decoration: InputDecoration(
-                          hintText: 'رقم الجوال',
+                          hintText: 'المعرّف',
                           filled: true,
                           fillColor: Colors.white,
                           contentPadding:
@@ -122,8 +122,7 @@ class _LoginScreenState extends State<LoginScreen> {
                         decoration: InputDecoration(
                           hintText: 'كلمة المرور',
                           filled: true,
-                          fillColor: Colors.white,
-                          contentPadding:
+                          fillColor: Colors.white,contentPadding:
                               const EdgeInsets.symmetric(horizontal: 16),
                           border: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(12),
