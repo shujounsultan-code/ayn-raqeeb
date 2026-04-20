@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'login_screen.dart';
 import 'widgets/back_button_widget.dart';
+import 'driver_login_screen.dart';
 
 class RoleSelectionScreen extends StatelessWidget {
   const RoleSelectionScreen({super.key});
@@ -80,6 +81,13 @@ class RoleSelectionScreen extends StatelessWidget {
               context,
               MaterialPageRoute(
                 builder: (context) => const LoginScreen(),
+              ),
+            );
+          } else if (text == 'السائق') {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => const DriverLoginScreen(),
               ),
             );
           }
