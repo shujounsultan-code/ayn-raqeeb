@@ -75,7 +75,7 @@ class RoleSelectionScreen extends StatelessWidget {
       height: 52,
       child: ElevatedButton(
         onPressed: () {
-          if (text == 'ولي الأمر') {
+          if (text == 'المدرسة')  {
             Navigator.push(
               context,
               MaterialPageRoute(
