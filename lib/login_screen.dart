@@ -93,8 +93,9 @@ class _LoginScreenState extends State<LoginScreen> {
                           hintText: 'المعرّف',
                           filled: true,
                           fillColor: Colors.white,
-                          contentPadding:
-                              const EdgeInsets.symmetric(horizontal: 16),
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                          ),
                           border: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(12),
                             borderSide: BorderSide.none,
@@ -109,8 +110,9 @@ class _LoginScreenState extends State<LoginScreen> {
                           hintText: 'كلمة المرور',
                           filled: true,
                           fillColor: Colors.white,
-                          contentPadding:
-                              const EdgeInsets.symmetric(horizontal: 16),
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                          ),
                           border: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(12),
                             borderSide: BorderSide.none,
@@ -134,7 +136,8 @@ class _LoginScreenState extends State<LoginScreen> {
                                   color: Colors.white,
                                 )
                               : const Text(
-                                  'دخول',style: TextStyle(fontSize: 16),
+                                  'دخول',
+                                  style: TextStyle(fontSize: 16),
                                 ),
                         ),
                       ),
