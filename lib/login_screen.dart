@@ -25,7 +25,10 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   Future<void> _login() async {
-    if (_idController.text.isEmpty || _passwordController.text.isEmpty) {
+    final id = _idController.text.trim().toUpperCase();
+    final password = _passwordController.text.trim();
+
+    if (id.isEmpty || password.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('أدخلي المعرّف وكلمة المرور')),
       );
@@ -45,9 +48,11 @@ class _LoginScreenState extends State<LoginScreen> {
       ),
     );
 
-    setState(() {
-      _isLoading = false;
-    });
+    if (mounted) {
+      setState(() {
+        _isLoading = false;
+      });
+    }
   }
 
   @override
@@ -65,6 +70,8 @@ class _LoginScreenState extends State<LoginScreen> {
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
+                      const BackButtonWidget(),
+                      const SizedBox(height: 10),
                       Image.asset(
                         'assets/images/logobg.png',
                         width: 160,
@@ -81,7 +88,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       const SizedBox(height: 30),
                       TextField(
                         controller: _idController,
-                        keyboardType: TextInputType.number,
+                        keyboardType: TextInputType.text,
                         decoration: InputDecoration(
                           hintText: 'المعرّف',
                           filled: true,
@@ -101,7 +108,8 @@ class _LoginScreenState extends State<LoginScreen> {
                         decoration: InputDecoration(
                           hintText: 'كلمة المرور',
                           filled: true,
-                          fillColor: Colors.white,contentPadding:
+                          fillColor: Colors.white,
+                          contentPadding:
                               const EdgeInsets.symmetric(horizontal: 16),
                           border: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(12),
@@ -112,35 +120,22 @@ class _LoginScreenState extends State<LoginScreen> {
                       const SizedBox(height: 24),
                       SizedBox(
                         width: double.infinity,
-                        height: 52,
+                        height: 50,
                         child: ElevatedButton(
                           onPressed: _isLoading ? null : _login,
                           style: ElevatedButton.styleFrom(
                             backgroundColor: const Color(0xFF1B7C80),
                             shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(14),
+                              borderRadius: BorderRadius.circular(12),
                             ),
-                            elevation: 0,
                           ),
                           child: _isLoading
                               ? const CircularProgressIndicator(
                                   color: Colors.white,
                                 )
                               : const Text(
-                                  'دخول',
-                                  style: TextStyle(
-                                    fontSize: 18,
-                                    color: Colors.white,
-                                  ),
+                                  'دخول',style: TextStyle(fontSize: 16),
                                 ),
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                      const Text(
-                        'ليس لديك حساب؟ سجل الآن',
-                        style: TextStyle(
-                          fontSize: 14,
-                          color: Colors.black54,
                         ),
                       ),
                     ],
@@ -149,7 +144,6 @@ class _LoginScreenState extends State<LoginScreen> {
               ),
             ),
           ),
-          const BackButtonWidget(),
         ],
       ),
     );
