@@ -6,6 +6,8 @@ import 'main.dart';
 import 'widgets/back_button_widget.dart';
 import 'home_screen.dart';
 import 'main.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+
 
 class DriverLoginScreen extends StatefulWidget {
   const DriverLoginScreen({super.key});
@@ -27,12 +29,56 @@ class _DriverLoginScreenState extends State<DriverLoginScreen> {
     super.dispose();
   }
 
-  void _login() {
-    Navigator.pushReplacement(
-      context,
-      MaterialPageRoute(
-        builder: (context) => MainNavigation(),
-      ),
+ Future<void> _login() async {
+    // 1. إظهار مؤشر التحميل
+    setState(() {
+      _isLoading = true;
+    });
+
+    try {
+      // 2. البحث في جدول users عن تطابق المعرف وكلمة المرور
+      final QuerySnapshot result = await FirebaseFirestore.instance
+          .collection('users')
+          .where('username', isEqualTo: _idController.text.trim())
+          .where('password', isEqualTo: _passwordController.text.trim())
+          .get();
+
+      // 3. التحقق من وجود المستخدم
+      if (result.docs.isNotEmpty) {
+        var userData = result.docs.first.data() as Map<String, dynamic>;
+        
+        // 4. التأكد أن "الدور" هو سائق (driver)
+        if (userData['role'] == 'driver') {
+          // إذا كان سائق، ننتقل للوحة التحكم
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(
+              builder: (context) => const MainNavigation(),
+            ),
+          );
+        } else {
+          // إذا وجدنا الحساب لكنه ليس سائقاً (مثلاً ولي أمر)
+          _showErrorSnackBar('هذا الحساب غير مسجل كسائق');
+        }
+      } else {
+        // إذا لم نجد أي تطابق للبيانات
+        _showErrorSnackBar('المعرف أو كلمة المرور غير صحيحة');
+      }
+    } catch (e) {
+      // في حال حدث خطأ في الاتصال
+      _showErrorSnackBar('حدث خطأ في الاتصال: $e');
+    } finally {
+      // 5. إيقاف مؤشر التحميل
+      setState(() {
+        _isLoading = false;
+      });
+    }
+  }
+
+  // دالة مساعدة لإظهار رسائل الخطأ
+  void _showErrorSnackBar(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message), backgroundColor: Colors.red),
     );
   }
 

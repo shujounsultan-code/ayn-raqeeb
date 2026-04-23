@@ -1,5 +1,7 @@
 
 import 'package:flutter/material.dart';
+import 'package:flutter_map/flutter_map.dart';
+import 'package:latlong2/latlong.dart';
 
 class DashboardPage extends StatelessWidget {
   const DashboardPage({super.key});
@@ -41,20 +43,48 @@ class DashboardPage extends StatelessWidget {
                 ],
               ),
             ),
-            // الخريطة
+            // الخريطة التفاعلية
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16),
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(16),
-                child: Image.asset(
-                  'assets/images/map.webp',
+                child: SizedBox(
                   height: 180,
                   width: double.infinity,
-                  fit: BoxFit.cover,
-                  errorBuilder: (context, error, stackTrace) => Container(
-                    height: 180,
-                    color: Colors.grey[300],
-                    child: const Icon(Icons.map, size: 50, color: Colors.grey),
+                  child: FlutterMap(
+                    options: const MapOptions(
+                      initialCenter: LatLng(21.4858, 40.5444), // موقع افتراضي (جدة)
+                      initialZoom: 13,
+                    ),
+                    children: [
+                      TileLayer(
+                        urlTemplate: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+                        subdomains: const ['a', 'b', 'c'],
+                      ),
+                      MarkerLayer(
+                        markers: [
+                          Marker(
+                            width: 40,
+                            height: 40,
+                            point: LatLng(21.4858, 40.5444),
+                            child: Container(
+                              decoration: BoxDecoration(
+                                color: Colors.red,
+                                shape: BoxShape.circle,
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.red.withOpacity(0.3),
+                                    blurRadius: 8,
+                                    spreadRadius: 2,
+                                  ),
+                                ],
+                              ),
+                              child: const Center(child: Text('🚌', style: TextStyle(fontSize: 22))),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
                   ),
                 ),
               ),

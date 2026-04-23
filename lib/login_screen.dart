@@ -36,35 +36,14 @@ class _LoginScreenState extends State<LoginScreen> {
       _isLoading = true;
     });
 
-    try {
-      final response = await http.post(
-        Uri.parse('http://10.0.2.2/login.php'),
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({
-          'id': _idController.text,
-          'password': _passwordController.text,
-        }),
-      );
-
-      final data = jsonDecode(response.body);
-
-      if (data['status'] == 'success') {
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(
-            builder: (context) => const HomeScreen(),
-          ),
-        );
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('المعرّف أو كلمة المرور غير صحيحة')),
-        );
-      }
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('تعذر الاتصال بالخادم')),
-      );
-    }
+    // تم فك الربط بقاعدة البيانات: تجاوز التحقق واعتبار الدخول ناجح دائماً
+    await Future.delayed(const Duration(seconds: 1));
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(
+        builder: (context) => const HomeScreen(),
+      ),
+    );
 
     setState(() {
       _isLoading = false;

@@ -1,10 +1,13 @@
 import 'package:flutter/material.dart';
+import 'package:firebase_core/firebase_core.dart'; 
 import 'welcome_screen.dart';
 import 'dashboard.dart';
 import 'qr_code.dart';
 import 'driver_details.dart';
 
-void main() {
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await Firebase.initializeApp(); 
   runApp(const MyApp());
 }
 

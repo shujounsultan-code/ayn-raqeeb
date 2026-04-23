@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "216130914782",
+    "project_id": "ayn-raqeeb",
+    "storage_bucket": "ayn-raqeeb.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:216130914782:android:5c41881579856444d4354f",
+        "android_client_info": {
+          "package_name": "com.example.ayn_raqeeb_app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDkHG09VnVKoNDlI_A1Rhwva3d5sMOxAaw"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
