@@ -1,9 +1,13 @@
 import 'package:flutter/material.dart';
+<<<<<<< HEAD
 import 'package:firebase_core/firebase_core.dart'; 
 import 'welcome_screen.dart';
 import 'dashboard.dart';
 import 'qr_code.dart';
 import 'driver_details.dart';
+=======
+import 'my_screens/chat_screen.dart';
+>>>>>>> 0c1b8ee (first UI)
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -16,9 +20,9 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
+    return const MaterialApp(
       debugShowCheckedModeBanner: false,
-      home: const WelcomeScreen(),
+      home: ChatScreen(),
     );
   }
 }
