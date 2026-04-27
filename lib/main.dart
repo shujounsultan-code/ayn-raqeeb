@@ -1,8 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
-import 'Financialfees11.dart';
 
-import 'welcome_screen.dart';
 import 'dashboard.dart';
 import 'qr_code.dart';
 import 'driver_details.dart';
@@ -21,11 +19,12 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return const MaterialApp(
       debugShowCheckedModeBanner: false,
-      home: ChatScreen(),
+      home: MainNavigation(),
     );
   }
 }
 
+// ---------------- MainNavigation ----------------
 class MainNavigation extends StatefulWidget {
   const MainNavigation({super.key});
 
@@ -40,6 +39,7 @@ class _MainNavigationState extends State<MainNavigation> {
     const DriverDetailsPage(),
     const QrCodePage(),
     const DashboardPage(),
+    const ChatScreen(), // 👈 واجهتك هنا بدون ما تخرب شيء
   ];
 
   @override
@@ -64,6 +64,10 @@ class _MainNavigationState extends State<MainNavigation> {
             BottomNavigationBarItem(
               icon: Icon(Icons.home_outlined),
               label: 'الرئيسية',
+            ),
+            BottomNavigationBarItem(
+              icon: Icon(Icons.chat_bubble_outline),
+              label: 'الشات', // 👈 زر واجهتك
             ),
           ],
         ),
