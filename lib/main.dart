@@ -1,17 +1,16 @@
 import 'package:flutter/material.dart';
-<<<<<<< HEAD
-import 'package:firebase_core/firebase_core.dart'; 
+import 'package:firebase_core/firebase_core.dart';
+import 'Financialfees11.dart';
+
 import 'welcome_screen.dart';
 import 'dashboard.dart';
 import 'qr_code.dart';
 import 'driver_details.dart';
-=======
 import 'my_screens/chat_screen.dart';
->>>>>>> 0c1b8ee (first UI)
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await Firebase.initializeApp(); 
+  await Firebase.initializeApp();
   runApp(const MyApp());
 }
 
@@ -27,20 +26,20 @@ class MyApp extends StatelessWidget {
   }
 }
 
-// ---------------- MainNavigation ----------------
 class MainNavigation extends StatefulWidget {
   const MainNavigation({super.key});
+
   @override
   State<MainNavigation> createState() => _MainNavigationState();
 }
 
 class _MainNavigationState extends State<MainNavigation> {
-  int _selectedIndex = 2; // يفتح على "الرئيسية" تلقائياً
+  int _selectedIndex = 2;
 
   final List<Widget> _pages = [
-    const DriverDetailsPage(), // حسابي -> يظهر بيانات السائق
-    const QrCodePage(),        // الكاميرا -> يظهر واجهة QR أولاً
-    const DashboardPage(),     // الرئيسية -> يظهر الخريطة والطلاب
+    const DriverDetailsPage(),
+    const QrCodePage(),
+    const DashboardPage(),
   ];
 
   @override
@@ -54,9 +53,18 @@ class _MainNavigationState extends State<MainNavigation> {
           onTap: (index) => setState(() => _selectedIndex = index),
           selectedItemColor: const Color(0xFF5BA199),
           items: const [
-            BottomNavigationBarItem(icon: Icon(Icons.person_outline), label: 'حسابي'),
-            BottomNavigationBarItem(icon: Icon(Icons.camera_alt_outlined), label: 'الكاميرا'),
-            BottomNavigationBarItem(icon: Icon(Icons.home_outlined), label: 'الرئيسية'),
+            BottomNavigationBarItem(
+              icon: Icon(Icons.person_outline),
+              label: 'حسابي',
+            ),
+            BottomNavigationBarItem(
+              icon: Icon(Icons.camera_alt_outlined),
+              label: 'الكاميرا',
+            ),
+            BottomNavigationBarItem(
+              icon: Icon(Icons.home_outlined),
+              label: 'الرئيسية',
+            ),
           ],
         ),
       ),
