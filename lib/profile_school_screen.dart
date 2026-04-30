@@ -75,17 +75,11 @@ class _ProfileSchoolScreenState extends State<ProfileSchoolScreen> {
             const SizedBox(height: 6),
             Text(
               value,
-              style: const TextStyle(
-                fontSize: 22,
-                fontWeight: FontWeight.bold,
-              ),
+              style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
             ),
             Text(
               title,
-              style: const TextStyle(
-                color: Colors.grey,
-                fontSize: 15,
-              ),
+              style: const TextStyle(color: Colors.grey, fontSize: 15),
             ),
           ],
         ),
@@ -137,9 +131,7 @@ class _ProfileSchoolScreenState extends State<ProfileSchoolScreen> {
       onTap: () {
         Navigator.pushAndRemoveUntil(
           context,
-          MaterialPageRoute(
-            builder: (_) => const LoginScreen(),
-          ),
+          MaterialPageRoute(builder: (_) => const LoginScreen()),
           (route) => false,
         );
       },
@@ -236,11 +228,7 @@ class _ProfileSchoolScreenState extends State<ProfileSchoolScreen> {
                       Row(
                         children: [
                           _buildStatCard('السائقين', drivers, Icons.person),
-                          _buildStatCard(
-                            'الباصات',
-                            buses,
-                            Icons.directions_bus,
-                          ),
+                          _buildStatCard('الباصات', buses, Icons.directions_bus),
                         ],
                       ),
                     const SizedBox(height: 16),

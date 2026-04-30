@@ -1,6 +1,4 @@
-import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
 import 'home_screen.dart';
 import 'widgets/back_button_widget.dart';
 
@@ -39,23 +37,23 @@ class _LoginScreenState extends State<LoginScreen> {
       _isLoading = true;
     });
 
-    // تم فك الربط بقاعدة البيانات: تجاوز التحقق واعتبار الدخول ناجح دائماً
     await Future.delayed(const Duration(seconds: 1));
+
+    if (!mounted) return;
+
     Navigator.pushReplacement(
       context,
       MaterialPageRoute(
         builder: (context) => const HomeScreen(
-  schoolId: '1',
-  schoolName: 'عين رقيب',
-)
+          schoolId: '1',
+          schoolName: 'الطائف',
+        ),
       ),
     );
 
-    if (mounted) {
-      setState(() {
-        _isLoading = false;
-      });
-    }
+    setState(() {
+      _isLoading = false;
+    });
   }
 
   @override
