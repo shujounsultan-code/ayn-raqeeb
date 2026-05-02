@@ -1,0 +1,146 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/material.dart';
+import 'dart:math';
+
+class AddStudentScreen extends StatefulWidget {
+  const AddStudentScreen({Key? key}) : super(key: key);
+
+  @override
+  State<AddStudentScreen> createState() => _AddStudentScreenState();
+}
+
+class _AddStudentScreenState extends State<AddStudentScreen> {
+  final TextEditingController _nameController = TextEditingController();
+  final TextEditingController _busIdController = TextEditingController();
+  String? _selectedGrade;
+  String _studentCode = '';
+  bool _isLoading = false;
+
+  final List<String> _grades = [
+    'الأول',
+    'الثاني',
+    'الثالث',
+    'الرابع',
+    'الخامس',
+    'السادس',
+  ];
+
+  @override
+  void initState() {
+    super.initState();
+    _generateStudentCode();
+  }
+
+  void _generateStudentCode() {
+    final random = Random();
+    final code = List.generate(6, (_) => random.nextInt(10)).join();
+    setState(() {
+      _studentCode = code;
+    });
+  }
+
+  Future<void> _addStudent() async {
+    if (_nameController.text.trim().isEmpty || _selectedGrade == null || _busIdController.text.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('يرجى تعبئة جميع الحقول')),
+      );
+      return;
+    }
+    setState(() {
+      _isLoading = true;
+    });
+    try {
+      await FirebaseFirestore.instance.collection('students').add({
+        'name': _nameController.text.trim(),
+        'student_code': _studentCode,
+        'bus_id': _busIdController.text.trim(),
+        'grade': _selectedGrade,
+        'parent_id': '',
+        'status': 'active',
+        'created_at': FieldValue.serverTimestamp(),
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('تمت إضافة الطالب بنجاح')),
+      );
+      _nameController.clear();
+      _busIdController.clear();
+      _generateStudentCode();
+      setState(() {
+        _selectedGrade = null;
+      });
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('حدث خطأ: $e')),
+      );
+    } finally {
+      setState(() {
+        _isLoading = false;
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('إضافة طالب'),
+      ),
+      body: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          children: [
+            TextField(
+              controller: _nameController,
+              decoration: const InputDecoration(
+                labelText: 'اسم الطالب',
+              ),
+            ),
+            const SizedBox(height: 16),
+            DropdownButtonFormField<String>(
+              value: _selectedGrade,
+              items: _grades
+                  .map((grade) => DropdownMenuItem(
+                        value: grade,
+                        child: Text('الصف $grade'),
+                      ))
+                  .toList(),
+              onChanged: (val) => setState(() => _selectedGrade = val),
+              decoration: const InputDecoration(
+                labelText: 'الصف',
+              ),
+            ),
+            const SizedBox(height: 16),
+            TextField(
+              controller: _busIdController,
+              decoration: const InputDecoration(
+                labelText: 'رقم الحافلة',
+              ),
+              keyboardType: TextInputType.number,
+            ),
+            const SizedBox(height: 16),
+            TextField(
+              enabled: false,
+              decoration: InputDecoration(
+                labelText: 'كود التحقق الفريد',
+                hintText: _studentCode,
+                suffixIcon: IconButton(
+                  icon: const Icon(Icons.refresh),
+                  tooltip: 'توليد كود جديد',
+                  onPressed: _generateStudentCode,
+                ),
+              ),
+              controller: TextEditingController(text: _studentCode),
+            ),
+            const SizedBox(height: 32),
+            _isLoading
+                ? const CircularProgressIndicator()
+                : ElevatedButton(
+                    onPressed: _addStudent,
+                    child: const Text('حفظ'),
+                  ),
+          ],
+        ),
+      ),
+    );
+  }
+}
