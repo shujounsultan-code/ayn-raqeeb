@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'firebase_options.dart';
 
 import 'welcome_screen.dart';
 
@@ -16,7 +17,9 @@ import 'my_screens/ai_chat_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await Firebase.initializeApp();
+  await Firebase.initializeApp(
+    options: DefaultFirebaseOptions.currentPlatform,
+  );
   runApp(const MyApp());
 }
 
@@ -114,7 +117,6 @@ class _ParentNavigationState extends State<ParentNavigation> {
               ],
             ),
           ),
-
           Positioned(
             left: aiLeft,
             top: aiTop,
@@ -135,7 +137,6 @@ class _ParentNavigationState extends State<ParentNavigation> {
           ),
         ],
       ),
-
       bottomNavigationBar: BottomNavigationBar(
         type: BottomNavigationBarType.fixed,
         currentIndex: _selectedIndex,

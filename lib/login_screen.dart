@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'home_screen.dart';
 import 'widgets/back_button_widget.dart';
 
@@ -37,23 +38,70 @@ class _LoginScreenState extends State<LoginScreen> {
       _isLoading = true;
     });
 
-    await Future.delayed(const Duration(seconds: 1));
+    try {
+      final doc = await FirebaseFirestore.instance
+          .collection('schools')
+          .doc(id)
+          .get();
 
-    if (!mounted) return;
+      if (!mounted) return;
 
-    Navigator.pushReplacement(
-      context,
-      MaterialPageRoute(
-        builder: (context) => const HomeScreen(
-          schoolId: '1',
-          schoolName: 'الطائف',
+      if (!doc.exists) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('المعرّف غير موجود')),
+        );
+        setState(() {
+          _isLoading = false;
+        });
+        return;
+      }
+
+      final data = doc.data()!;
+      final savedPassword = data['password']?.toString() ?? '';
+
+      if (savedPassword != password) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('كلمة المرور غير صحيحة')),
+        );
+        setState(() {
+          _isLoading = false;
+        });
+        return;
+      }
+
+      final schoolName = data['school_name']?.toString() ?? '';
+
+      await FirebaseFirestore.instance.collection('records').add({
+        'school_id': id,
+        'title': 'تسجيل دخول',
+        'description': 'تم تسجيل دخول $schoolName',
+        'time': DateTime.now().toString(),
+      });
+
+      if (!mounted) return;
+
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+          builder: (context) => HomeScreen(
+            schoolId: id,
+            schoolName: schoolName,
+          ),
         ),
-      ),
-    );
+      );
+    } catch (e) {
+      if (!mounted) return;
 
-    setState(() {
-      _isLoading = false;
-    });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('الخطأ: $e')),
+      );
+    }
+
+    if (mounted) {
+      setState(() {
+        _isLoading = false;
+      });
+    }
   }
 
   @override

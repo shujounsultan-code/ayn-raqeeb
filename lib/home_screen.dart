@@ -3,6 +3,7 @@ import 'widgets/back_button_widget.dart';
 import 'students_screen.dart';
 import 'profile_school_screen.dart';
 import 'records_screen.dart';
+import 'profile_school_screen.dart';
 
 class HomeScreen extends StatelessWidget {
   final String schoolId;

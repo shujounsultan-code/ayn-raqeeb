@@ -1,6 +1,5 @@
-import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'widgets/back_button_widget.dart';
 
 class SchoolInfoScreen extends StatefulWidget {
@@ -19,27 +18,23 @@ class SchoolInfoScreen extends StatefulWidget {
 
 class _SchoolInfoScreenState extends State<SchoolInfoScreen> {
   bool isLoading = true;
-  String address = '';
+
   String phone = '';
   String email = '';
-  String latitude = '';
-  String longitude = '';
 
   Future<void> fetchSchoolInfo() async {
     try {
-      final response = await http.get(
-        Uri.parse('http://10.0.2.2/get_school_info.php?id=${widget.schoolId}'),
-      );
+      final doc = await FirebaseFirestore.instance
+          .collection('schools')
+          .doc(widget.schoolId)
+          .get();
 
-      final data = jsonDecode(response.body);
+      if (doc.exists) {
+        final data = doc.data()!;
 
-      if (data['status'] == 'success') {
         setState(() {
-          address = data['address']?.toString() ?? '';
-          phone = data['phone_number']?.toString() ?? '';
+          phone = data['phone']?.toString() ?? '';
           email = data['email']?.toString() ?? '';
-          latitude = data['latitude']?.toString() ?? '';
-          longitude = data['longitude']?.toString() ?? '';
           isLoading = false;
         });
       } else {
@@ -132,11 +127,8 @@ class _SchoolInfoScreenState extends State<SchoolInfoScreen> {
                             children: [
                               _item('اسم المدرسة', widget.schoolName, Icons.school),
                               _item('المعرّف', widget.schoolId, Icons.badge_outlined),
-                              _item('العنوان', address, Icons.location_on_outlined),
                               _item('الجوال', phone, Icons.phone_outlined),
                               _item('البريد', email, Icons.email_outlined),
-                              _item('خط العرض', latitude, Icons.map_outlined),
-                              _item('خط الطول', longitude, Icons.map_outlined),
                             ],
                           ),
                         ),

@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'widgets/back_button_widget.dart';
 import 'school_info_screen.dart';
 import 'drivers_screen.dart';
@@ -23,9 +24,23 @@ class ProfileSchoolScreen extends StatefulWidget {
 }
 
 class _ProfileSchoolScreenState extends State<ProfileSchoolScreen> {
+  String currentSchoolName = '';
   String buses = '0';
   String drivers = '0';
   bool isLoading = true;
+
+  Future<void> fetchSchoolData() async {
+    final doc = await FirebaseFirestore.instance
+        .collection('schools')
+        .doc(widget.schoolId)
+        .get();
+
+    if (doc.exists) {
+      setState(() {
+        currentSchoolName = doc['school_name'];
+      });
+    }
+  }
 
   Future<void> fetchStats() async {
     try {
@@ -42,20 +57,17 @@ class _ProfileSchoolScreenState extends State<ProfileSchoolScreen> {
           isLoading = false;
         });
       } else {
-        setState(() {
-          isLoading = false;
-        });
+        isLoading = false;
       }
     } catch (e) {
-      setState(() {
-        isLoading = false;
-      });
+      isLoading = false;
     }
   }
 
   @override
   void initState() {
     super.initState();
+    fetchSchoolData();
     fetchStats();
   }
 
@@ -159,6 +171,9 @@ class _ProfileSchoolScreenState extends State<ProfileSchoolScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final displayName =
+        currentSchoolName.isEmpty ? widget.schoolName : currentSchoolName;
+
     return Directionality(
       textDirection: TextDirection.rtl,
       child: Scaffold(
@@ -198,8 +213,7 @@ class _ProfileSchoolScreenState extends State<ProfileSchoolScreen> {
                           ),
                           const SizedBox(height: 10),
                           Text(
-                            widget.schoolName,
-                            textAlign: TextAlign.center,
+                            displayName,
                             style: const TextStyle(
                               fontSize: 21,
                               fontWeight: FontWeight.bold,
@@ -210,7 +224,6 @@ class _ProfileSchoolScreenState extends State<ProfileSchoolScreen> {
                             'المعرّف: ${widget.schoolId}',
                             style: const TextStyle(
                               color: Colors.grey,
-                              fontSize: 15,
                             ),
                           ),
                         ],
@@ -218,12 +231,7 @@ class _ProfileSchoolScreenState extends State<ProfileSchoolScreen> {
                     ),
                     const SizedBox(height: 16),
                     if (isLoading)
-                      const Padding(
-                        padding: EdgeInsets.all(16),
-                        child: CircularProgressIndicator(
-                          color: Color(0xFF1B7C80),
-                        ),
-                      )
+                      const CircularProgressIndicator()
                     else
                       Row(
                         children: [
@@ -242,7 +250,7 @@ class _ProfileSchoolScreenState extends State<ProfileSchoolScreen> {
                               Icons.info_outline,
                               SchoolInfoScreen(
                                 schoolId: widget.schoolId,
-                                schoolName: widget.schoolName,
+                                schoolName: displayName,
                               ),
                             ),
                             _buildItem(
@@ -251,7 +259,7 @@ class _ProfileSchoolScreenState extends State<ProfileSchoolScreen> {
                               Icons.people_outline,
                               DriversScreen(
                                 schoolId: widget.schoolId,
-                                schoolName: widget.schoolName,
+                                schoolName: displayName,
                               ),
                             ),
                             _buildItem(
@@ -260,7 +268,7 @@ class _ProfileSchoolScreenState extends State<ProfileSchoolScreen> {
                               Icons.notifications_outlined,
                               BusAlertsScreen(
                                 schoolId: widget.schoolId,
-                                schoolName: widget.schoolName,
+                                schoolName: displayName,
                               ),
                             ),
                             _buildItem(
@@ -269,7 +277,7 @@ class _ProfileSchoolScreenState extends State<ProfileSchoolScreen> {
                               Icons.settings_outlined,
                               SettingsScreen(
                                 schoolId: widget.schoolId,
-                                schoolName: widget.schoolName,
+                                schoolName: displayName,
                               ),
                             ),
                             const SizedBox(height: 10),
