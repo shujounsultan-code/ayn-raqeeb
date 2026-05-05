@@ -2,9 +2,111 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'driver_session.dart';
+import 'dart:math' as math;
 
-class DashboardPage extends StatelessWidget {
+class DashboardPage extends StatefulWidget {
   const DashboardPage({super.key});
+
+  @override
+  State<DashboardPage> createState() => _DashboardPageState();
+}
+
+class _DashboardPageState extends State<DashboardPage> {
+  void _showPopup(BuildContext context, String text) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        content: Text(text, textAlign: TextAlign.center, style: const TextStyle(fontSize: 16)),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('إغلاق'),
+          ),
+        ],
+      ),
+    );
+  }
+  List<Map<String, dynamic>> students = [];
+  LatLng? busLocation;
+  double? busAccuracy;
+  bool isLoading = true;
+  String? errorMessage;
+  Map<String, dynamic>? driverData;
+  final LatLng schoolLocation = const LatLng(21.4858, 40.5444); // موقع المدرسة (مثال: جدة)
+  final MapController _mapController = MapController();
+
+  @override
+  void initState() {
+    super.initState();
+    driverData = DriverSession.currentDriver;
+    fetchData();
+  }
+
+  Future<void> fetchData() async {
+    setState(() {
+      isLoading = true;
+      errorMessage = null;
+    });
+    try {
+      final busNumber = driverData != null ? driverData!['bus_number'] : null;
+      // جلب بيانات الطلاب المرتبطين بنفس الباص
+      final studentsSnapshot = await FirebaseFirestore.instance
+          .collection('students')
+          .where('bus', isEqualTo: busNumber)
+          .get();
+      final List<Map<String, dynamic>> loadedStudents = [];
+      for (var doc in studentsSnapshot.docs) {
+        final data = doc.data();
+        if (data.containsKey('home_lat') && data.containsKey('home_lng')) {
+          loadedStudents.add({
+            'name': data['name'] ?? '',
+            'lat': data['home_lat'],
+            'lng': data['home_lng'],
+            'grade': data['grade'] ?? '',
+          });
+        }
+      }
+      // ترتيب الطالبات حسب المسافة من المدرسة (أقرب أولاً)
+      loadedStudents.sort((a, b) {
+        final d1 = Distance().as(LengthUnit.Kilometer, schoolLocation, LatLng(a['lat'], a['lng']));
+        final d2 = Distance().as(LengthUnit.Kilometer, schoolLocation, LatLng(b['lat'], b['lng']));
+        return d1.compareTo(d2);
+      });
+      // جلب موقع الحافلة
+      LatLng? busLoc;
+      double? accuracy;
+      final busSnap = await FirebaseFirestore.instance.collection('bus_locations').doc(busNumber).get();
+      if (busSnap.exists) {
+        final data = busSnap.data();
+        if (data != null && data.containsKey('lat') && data.containsKey('lng')) {
+          busLoc = LatLng(data['lat'], data['lng']);
+          if (data.containsKey('accuracy')) accuracy = data['accuracy'] * 1.0;
+        }
+      }
+      setState(() {
+        students = loadedStudents;
+        busLocation = busLoc ?? schoolLocation;
+        busAccuracy = accuracy ?? 50.0;
+        isLoading = false;
+      });
+      // fitBounds بعد التحميل
+      if (loadedStudents.isNotEmpty) {
+        final points = [schoolLocation, ...loadedStudents.map((s) => LatLng(s['lat'], s['lng']))];
+        var bounds = LatLngBounds.fromPoints(points);
+        Future.delayed(const Duration(milliseconds: 300), () {
+          _mapController.fitBounds(bounds, options: const FitBoundsOptions(padding: EdgeInsets.all(20)));
+        });
+      }
+    } catch (e) {
+      setState(() {
+        errorMessage = 'خطأ في جلب البيانات: $e';
+        isLoading = false;
+      });
+    }
+  }
+
 
   @override
   Widget build(BuildContext context) {
@@ -12,176 +114,288 @@ class DashboardPage extends StatelessWidget {
       textDirection: TextDirection.rtl,
       child: Scaffold(
         backgroundColor: const Color(0xFFF7F9FC),
-        body: Column(
-          children: [
-            // الشريط العلوي (الساعة، الإشعارات، الشعار)
-            Padding(
-              padding: const EdgeInsets.only(top: 16, left: 16, right: 16, bottom: 8),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.start,
-                crossAxisAlignment: CrossAxisAlignment.start,
+        body: isLoading
+            ? const Center(child: CircularProgressIndicator())
+            : Column(
                 children: [
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Image.asset(
-                        'assets/images/logobg.png',
-                        width: 60,
-                        height: 60,
-                        errorBuilder: (context, error, stackTrace) => const Icon(Icons.image, size: 40),
-                      ),
-                      const SizedBox(height: 1),
-                      const Text('عين رقيب', style: TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF1B7C80), fontSize: 13)),
-                    ],
-                  ),
-                  // أيقونة الإشعارات
-                  Spacer(),
-                  IconButton(
-                    icon: const Icon(Icons.notifications_none, color: Colors.black, size: 28),
-                    onPressed: () {},
-                  ),
-                ],
-              ),
-            ),
-            // الخريطة التفاعلية
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(16),
-                child: SizedBox(
-                  height: 180,
-                  width: double.infinity,
-                  child: FlutterMap(
-                    options: const MapOptions(
-                      initialCenter: LatLng(21.4858, 40.5444), // موقع افتراضي (جدة)
-                      initialZoom: 13,
+                  // الشريط العلوي (لا يتغير)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 16, left: 16, right: 16, bottom: 8),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.start,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Image.asset(
+                              'assets/images/logobg.png',
+                              width: 60,
+                              height: 60,
+                              errorBuilder: (context, error, stackTrace) => const Icon(Icons.image, size: 40),
+                            ),
+                            const SizedBox(height: 1),
+                            const Text('عين رقيب', style: TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF1B7C80), fontSize: 13)),
+                          ],
+                        ),
+                        const Spacer(),
+                        IconButton(
+                          icon: const Icon(Icons.notifications_none, color: Colors.black, size: 28),
+                          onPressed: () {},
+                        ),
+                      ],
                     ),
-                    children: [
-                      TileLayer(
-                        urlTemplate: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
-                        subdomains: const ['a', 'b', 'c'],
-                      ),
-                      MarkerLayer(
-                        markers: [
-                          Marker(
-                            width: 40,
-                            height: 40,
-                            point: LatLng(21.4858, 40.5444),
-                            child: Container(
-                              decoration: BoxDecoration(
-                                color: Colors.red,
-                                shape: BoxShape.circle,
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: Colors.red.withOpacity(0.3),
-                                    blurRadius: 8,
-                                    spreadRadius: 2,
+                  ),
+                  // الخريطة
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(16),
+                      child: SizedBox(
+                        height: 200,
+                        width: double.infinity,
+                        child: FlutterMap(
+                          mapController: _mapController,
+                          options: MapOptions(
+                            initialCenter: busLocation ?? schoolLocation,
+                            initialZoom: 13,
+                            interactionOptions: const InteractionOptions(enableScrollWheel: false, enableMultiFingerGestureRace: false),
+                          ),
+                          children: [
+                            TileLayer(
+                              urlTemplate: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+                              subdomains: const ['a', 'b', 'c'],
+                              userAgentPackageName: 'com.example.ayn_raqeeb_app',
+                            ),
+                            // Polyline route: من المدرسة إلى كل طالبة بالترتيب (متقطع)
+                            if (students.isNotEmpty)
+                              PolylineLayer(
+                                polylines: [
+                                  Polyline(
+                                    points: [schoolLocation, ...students.map((s) => LatLng(s['lat'], s['lng']))],
+                                    color: const Color(0xFF1B7C80),
+                                    strokeWidth: 4,
+                                    isDotted: true,
+                                    borderColor: Colors.white,
+                                    borderStrokeWidth: 0.5,
                                   ),
                                 ],
                               ),
-                              child: const Center(child: Text('🚌', style: TextStyle(fontSize: 22))),
+                            // دائرة دقة GPS حول الحافلة (CircleLayer)
+                            if (busLocation != null && busAccuracy != null)
+                              CircleLayer(
+                                circles: [
+                                  CircleMarker(
+                                    point: busLocation!,
+                                    color: const Color(0xFF1B7C80).withOpacity(0.1),
+                                    borderStrokeWidth: 1,
+                                    borderColor: const Color(0xFF1B7C80),
+                                    radius: busAccuracy! / 2,
+                                  ),
+                                ],
+                              ),
+                            // Markers: المدرسة، الحافلة، الطالبات
+                            MarkerLayer(
+                              markers: [
+                                // Marker المدرسة
+                                Marker(
+                                  width: 32,
+                                  height: 32,
+                                  point: schoolLocation,
+                                  child: GestureDetector(
+                                    onTap: () => _showPopup(context, '🏫 المدرسة'),
+                                    child: Container(
+                                      decoration: BoxDecoration(
+                                        color: const Color(0xFF1B7C80),
+                                        shape: BoxShape.circle,
+                                        boxShadow: [
+                                          BoxShadow(
+                                            color: const Color(0xFF1B7C80).withOpacity(0.3),
+                                            blurRadius: 8,
+                                            spreadRadius: 2,
+                                          ),
+                                        ],
+                                      ),
+                                      child: const Center(child: Text('🏫', style: TextStyle(fontSize: 18, color: Colors.white))),
+                                    ),
+                                  ),
+                                ),
+                                // Marker الحافلة
+                                if (busLocation != null)
+                                  Marker(
+                                    width: 36,
+                                    height: 36,
+                                    point: busLocation!,
+                                    child: GestureDetector(
+                                      onTap: () => _showPopup(context, '🚌 حافلة 26'),
+                                      child: Container(
+                                        decoration: BoxDecoration(
+                                          color: const Color(0xFFdc2626),
+                                          shape: BoxShape.circle,
+                                          boxShadow: [
+                                            BoxShadow(
+                                              color: const Color(0xFFdc2626).withOpacity(0.3),
+                                              blurRadius: 8,
+                                              spreadRadius: 2,
+                                            ),
+                                          ],
+                                        ),
+                                        child: const Center(child: Text('🚌', style: TextStyle(fontSize: 18, color: Colors.white))),
+                                      ),
+                                    ),
+                                  ),
+                                // Markers الطالبات
+                                ...students.map((s) => Marker(
+                                      width: 24,
+                                      height: 24,
+                                      point: LatLng(s['lat'], s['lng']),
+                                      child: GestureDetector(
+                                        onTap: () => _showPopup(context, '📍 ${s['name']}'),
+                                        child: Container(
+                                          decoration: BoxDecoration(
+                                            color: const Color(0xFFD97706),
+                                            shape: BoxShape.circle,
+                                            boxShadow: [
+                                              BoxShadow(
+                                                color: const Color(0xFFD97706).withOpacity(0.3),
+                                                blurRadius: 6,
+                                                spreadRadius: 1,
+                                              ),
+                                            ],
+                                          ),
+                                          child: const Center(child: Text('📍', style: TextStyle(fontSize: 13, color: Colors.white))),
+                                        ),
+                                      ),
+                                    )),
+                              ],
                             ),
-                          ),
-                        ],
+                          ],
+                        ),
                       ),
-                    ],
+                    ),
                   ),
-                ),
-              ),
-            ),
-            const SizedBox(height: 12),
-            // قائمة الطلاب
-            Expanded(
-              child: ListView(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 0),
-                children: [
-                  _studentCard(
-                    name: 'نورة سالم',
-                    image: 'assets/images/student1.png',
-                    bgColor: Color(0xFFF3E6F9),
+                  // شريط معلومات الطريق (وقت، مسافة، عدد الطالبات)
+                  Container(
+                    margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: const Color(0xFFEEEDED)),
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceAround,
+                      children: [
+                        _routeStat('⏱️', 'الوقت المتبقي', _estimateTime()),
+                        _routeStat('📏', 'المسافة', _estimateDistance()),
+                        _routeStat('👧', 'على الباص', students.length.toString()),
+                      ],
+                    ),
                   ),
-                  _studentCard(
-                    name: 'شهد سلطان',
-                    image: 'assets/student2.png',
-                    bgColor: Color(0xFFFFE3D3),
-                  ),
-                  _studentCard(
-                    name: 'لولو فهد',
-                    image: 'assets/student3.png',
-                    bgColor: Color(0xFFFFF3B0),
+                  // قائمة الطالبات
+                  Expanded(
+                    child: students.isEmpty
+                        ? const Center(child: Text('لا توجد طالبات'))
+                        : ListView.builder(
+                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 0),
+                            itemCount: students.length,
+                            itemBuilder: (context, i) {
+                              final s = students[i];
+                              return Container(
+                                margin: const EdgeInsets.only(bottom: 12),
+                                decoration: BoxDecoration(
+                                  color: Colors.white,
+                                  borderRadius: BorderRadius.circular(15),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: Colors.black.withOpacity(0.05),
+                                      blurRadius: 10,
+                                      offset: const Offset(0, 4),
+                                    ),
+                                  ],
+                                ),
+                                child: Row(
+                                  children: [
+                                    Container(
+                                      width: 60,
+                                      height: 60,
+                                      margin: const EdgeInsets.all(10),
+                                      decoration: BoxDecoration(
+                                        color: const Color(0xFFF3E6F9),
+                                        borderRadius: BorderRadius.circular(12),
+                                      ),
+                                      child: const Icon(Icons.person, size: 32, color: Colors.grey),
+                                    ),
+                                    Expanded(
+                                      child: Padding(
+                                        padding: const EdgeInsets.symmetric(horizontal: 8.0),
+                                        child: Text(
+                                          'الاسم : ${s['name']}',
+                                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                                          textAlign: TextAlign.right,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              );
+                            },
+                          ),
                   ),
                 ],
               ),
+      ),
+    );
+  }
+
+  Widget _routeStat(String icon, String label, String value) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        Text(value, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Color(0xFF1B7C80))),
+        const SizedBox(height: 4),
+        Text('$icon $label', style: const TextStyle(fontSize: 11, color: Color(0xFFb0b8c1))),
+      ],
+    );
+  }
+
+  String _estimateTime() {
+    // تقدير الوقت (مطابق للـ JS: دقيقة لكل طالبة + 0.5 دقيقة/كم، يبدأ من المدرسة)
+    if (students.isEmpty) return '--';
+    double totalDist = 0;
+    LatLng prev = schoolLocation;
+    for (var s in students) {
+      totalDist += Distance().as(LengthUnit.Kilometer, prev, LatLng(s['lat'], s['lng']));
+      prev = LatLng(s['lat'], s['lng']);
+    }
+    final eta = math.max(5, (students.length * 1 + totalDist * 0.5).round());
+    return '$eta د';
+  }
+
+  String _estimateDistance() {
+    if (students.isEmpty) return '--';
+    double totalDist = 0;
+    LatLng prev = schoolLocation;
+    for (var s in students) {
+      totalDist += Distance().as(LengthUnit.Kilometer, prev, LatLng(s['lat'], s['lng']));
+      prev = LatLng(s['lat'], s['lng']);
+    }
+    return '${totalDist.toStringAsFixed(1)} كم';
+    // Popup بديل بسيط (Dialog)
+    void _showPopup(BuildContext context, String text) {
+      showDialog(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          content: Text(text, textAlign: TextAlign.center, style: const TextStyle(fontSize: 16)),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(),
+              child: const Text('إغلاق'),
             ),
           ],
         ),
-      ),
-    );
-  }
-
-  Widget _studentCard({required String name, required String image, required Color bgColor}) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(15),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 60,
-            height: 60,
-            margin: const EdgeInsets.all(10),
-            decoration: BoxDecoration(
-              color: bgColor,
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(12),
-              child: Image.asset(
-                image,
-                fit: BoxFit.cover,
-                errorBuilder: (context, error, stackTrace) => const Icon(Icons.person, size: 32, color: Colors.grey),
-              ),
-            ),
-          ),
-          Expanded(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 8.0),
-              child: Text(
-                'الاسم : $name',
-                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-                textAlign: TextAlign.right,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _navItem(BuildContext context, IconData icon, String label, bool active, String route) {
-    return GestureDetector(
-      onTap: () {
-        if (route != '#') {
-          Navigator.pushReplacementNamed(context, route);
-        }
-      },
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(icon, color: active ? Color(0xFF2dafb4) : Color(0xFF999999), size: 24),
-          const SizedBox(height: 4),
-          Text(label, style: TextStyle(color: active ? Color(0xFF2dafb4) : Color(0xFF999999), fontSize: 12, fontWeight: FontWeight.w500)),
-        ],
-      ),
-    );
+      );
+    }
   }
 }
+// ...existing code...

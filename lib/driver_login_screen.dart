@@ -7,6 +7,7 @@ import 'widgets/back_button_widget.dart';
 import 'home_screen.dart';
 import 'main.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'driver_session.dart';
 
 
 class DriverLoginScreen extends StatefulWidget {
@@ -21,6 +22,7 @@ class _DriverLoginScreenState extends State<DriverLoginScreen> {
   final TextEditingController _passwordController = TextEditingController();
 
   bool _isLoading = false;
+  bool _obscurePassword = true;
 
   @override
   void dispose() {
@@ -29,49 +31,30 @@ class _DriverLoginScreenState extends State<DriverLoginScreen> {
     super.dispose();
   }
 
- Future<void> _login() async {
-    // 1. إظهار مؤشر التحميل
-    setState(() {
-      _isLoading = true;
-    });
-
+  Future<void> _login() async {
+    setState(() { _isLoading = true; });
     try {
-      // 2. البحث في جدول users عن تطابق المعرف وكلمة المرور
       final QuerySnapshot result = await FirebaseFirestore.instance
-          .collection('users')
-          .where('username', isEqualTo: _idController.text.trim())
+          .collection('drivers')
+          .where('driver_id', isEqualTo: _idController.text.trim())
           .where('password', isEqualTo: _passwordController.text.trim())
           .get();
-
-      // 3. التحقق من وجود المستخدم
       if (result.docs.isNotEmpty) {
-        var userData = result.docs.first.data() as Map<String, dynamic>;
-        
-        // 4. التأكد أن "الدور" هو سائق (driver)
-        if (userData['role'] == 'driver') {
-          // إذا كان سائق، ننتقل للوحة التحكم
-          Navigator.pushReplacement(
-            context,
-            MaterialPageRoute(
-              builder: (context) => const MainNavigation(),
-            ),
-          );
-        } else {
-          // إذا وجدنا الحساب لكنه ليس سائقاً (مثلاً ولي أمر)
-          _showErrorSnackBar('هذا الحساب غير مسجل كسائق');
-        }
+        // حفظ بيانات السائق في DriverSession
+        DriverSession.currentDriver = result.docs.first.data() as Map<String, dynamic>?;
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(
+            builder: (context) => const MainNavigation(),
+          ),
+        );
       } else {
-        // إذا لم نجد أي تطابق للبيانات
-        _showErrorSnackBar('المعرف أو كلمة المرور غير صحيحة');
+        _showErrorSnackBar('المعرّف أو كلمة المرور غير صحيحة');
       }
     } catch (e) {
-      // في حال حدث خطأ في الاتصال
       _showErrorSnackBar('حدث خطأ في الاتصال: $e');
     } finally {
-      // 5. إيقاف مؤشر التحميل
-      setState(() {
-        _isLoading = false;
-      });
+      setState(() { _isLoading = false; });
     }
   }
 
@@ -131,16 +114,23 @@ class _DriverLoginScreenState extends State<DriverLoginScreen> {
                       const SizedBox(height: 16),
                       TextField(
                         controller: _passwordController,
-                        obscureText: true,
+                        obscureText: _obscurePassword,
                         decoration: InputDecoration(
                           hintText: 'كلمة المرور',
                           filled: true,
                           fillColor: Colors.white,
-                          contentPadding:
-                              const EdgeInsets.symmetric(horizontal: 16),
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 16),
                           border: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(12),
                             borderSide: BorderSide.none,
+                          ),
+                          suffixIcon: IconButton(
+                            icon: Icon(_obscurePassword ? Icons.visibility : Icons.visibility_off),
+                            onPressed: () {
+                              setState(() {
+                                _obscurePassword = !_obscurePassword;
+                              });
+                            },
                           ),
                         ),
                       ),
