@@ -110,6 +110,11 @@ class _LoginScreenState extends State<LoginScreen> {
       backgroundColor: const Color(0xFFF2F4F7),
       body: Stack(
         children: [
+          Positioned(
+           top: 50,
+           left: 20,
+           child: const BackButtonWidget(),
+         ),
           SafeArea(
             child: Center(
               child: Padding(
@@ -119,7 +124,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      const BackButtonWidget(),
+ 
                       const SizedBox(height: 10),
                       Image.asset(
                         'assets/images/logobg.png',
