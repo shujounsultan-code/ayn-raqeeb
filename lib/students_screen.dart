@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'student_parent_details_screen.dart';
 
 class StudentsScreen extends StatefulWidget {
   const StudentsScreen({super.key});
@@ -96,13 +97,16 @@ class _StudentsScreenState extends State<StudentsScreen> {
                 final grade = gradeController.text.trim();
                 final bus = int.tryParse(busController.text.trim());
 
-                if (name.isEmpty || !studentsByGrade.containsKey(grade) || bus == null) {
+                if (name.isEmpty ||
+                    !studentsByGrade.containsKey(grade) ||
+                    bus == null) {
                   return;
                 }
 
                 setState(() {
                   studentsByGrade[grade]!.add({'name': name, 'bus': bus});
                 });
+
                 Navigator.pop(ctx);
               },
               child: const Text('إضافة', style: TextStyle(color: Colors.white)),
@@ -128,10 +132,7 @@ class _StudentsScreenState extends State<StudentsScreen> {
             _selectedGrade == null
                 ? 'الطالبات'
                 : 'طالبات الصف ${gradeNames[_selectedGrade!]}',
-            style: const TextStyle(
-              fontWeight: FontWeight.bold,
-              fontSize: 18,
-            ),
+            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
           ),
           leading: IconButton(
             icon: const Icon(Icons.arrow_back_ios_new),
@@ -254,56 +255,67 @@ class _StudentsScreenState extends State<StudentsScreen> {
       itemCount: students.length,
       itemBuilder: (context, index) {
         final student = students[index];
-        return Container(
-          margin: const EdgeInsets.only(bottom: 10),
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: const Color(0xFFE2E2E2)),
-          ),
-          child: Row(
-            children: [
-              Container(
-                width: 45,
-                height: 45,
-                decoration: BoxDecoration(
-                  color: const Color(0xFFE8F5F5),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(12),
-                  child: Image.asset(
-                    'assets/images/students.png',
-                    fit: BoxFit.contain,
+
+        return GestureDetector(
+          onTap: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => StudentParentDetailsScreen(student: student),
+              ),
+            );
+          },
+          child: Container(
+            margin: const EdgeInsets.only(bottom: 10),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: const Color(0xFFE2E2E2)),
+            ),
+            child: Row(
+              children: [
+                Container(
+                  width: 45,
+                  height: 45,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFE8F5F5),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(12),
+                    child: Image.asset(
+                      'assets/images/students.png',
+                      fit: BoxFit.contain,
+                    ),
                   ),
                 ),
-              ),
-              const SizedBox(width: 14),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      student['name'],
-                      style: const TextStyle(
-                        fontSize: 15,
-                        fontWeight: FontWeight.bold,
-                        color: Color(0xFF333333),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        student['name'],
+                        style: const TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.bold,
+                          color: Color(0xFF333333),
+                        ),
                       ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      'باص ${student['bus']}',
-                      style: const TextStyle(
-                        fontSize: 13,
-                        color: Color(0xFF1B7C80),
+                      const SizedBox(height: 4),
+                      Text(
+                        'باص ${student['bus']}',
+                        style: const TextStyle(
+                          fontSize: 13,
+                          color: Color(0xFF1B7C80),
+                        ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         );
       },
