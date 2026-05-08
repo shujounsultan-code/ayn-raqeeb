@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'firebase_options.dart';
-import 'bus_fees_screen.dart';
 import 'welcome_screen.dart';
 import 'add_bus_page.dart';
 import 'buses_page.dart';
