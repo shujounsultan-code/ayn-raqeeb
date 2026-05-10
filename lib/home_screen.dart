@@ -4,6 +4,7 @@ import 'widgets/back_button_widget.dart';
 import 'students_screen.dart';
 import 'profile_school_screen.dart';
 import 'records_screen.dart';
+import 'buses_page.dart';  
 
 class HomeScreen extends StatelessWidget {
   final String schoolId;
@@ -384,6 +385,10 @@ class HomeScreen extends StatelessWidget {
                                   context,
                                   'الباصات',
                                   'assets/images/bus.png',
+                                  onTap: () => Navigator.push(
+                                    context,
+                                    MaterialPageRoute(builder: (_) => const BusesPage()),
+                                  ),
                                 ),
                                 _buildCard(
                                   context,
