@@ -3,7 +3,9 @@ import 'package:flutter/material.dart';
 import 'dart:math';
 
 class AddStudentScreen extends StatefulWidget {
-  const AddStudentScreen({Key? key}) : super(key: key);
+  final String? schoolId;
+
+  const AddStudentScreen({Key? key, this.schoolId}) : super(key: key);
 
   @override
   State<AddStudentScreen> createState() => _AddStudentScreenState();
@@ -53,10 +55,11 @@ class _AddStudentScreenState extends State<AddStudentScreen> {
       await FirebaseFirestore.instance.collection('students').add({
         'name': _nameController.text.trim(),
         'student_code': _studentCode,
-        'bus_id': _busIdController.text.trim(),
+        'bus': _busIdController.text.trim(),
         'grade': _selectedGrade,
         'parent_id': '',
         'status': 'active',
+        'school_id': widget.schoolId ?? '',
         'created_at': FieldValue.serverTimestamp(),
       });
       ScaffoldMessenger.of(context).showSnackBar(

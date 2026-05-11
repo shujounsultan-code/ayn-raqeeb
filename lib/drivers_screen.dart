@@ -245,6 +245,7 @@ class _DriversScreenState extends State<DriversScreen> {
                                 contentPadding: const EdgeInsets.symmetric(vertical: 32, horizontal: 24),
                                 content: StatefulBuilder(
                                   builder: (context, setStateDialog) {
+                                    String? selectedBusNumber;
                                     return Column(
                                       mainAxisSize: MainAxisSize.min,
                                       crossAxisAlignment: CrossAxisAlignment.end,
@@ -268,11 +269,47 @@ class _DriversScreenState extends State<DriversScreen> {
                                           textAlign: TextAlign.right,
                                         ),
                                         const SizedBox(height: 16),
-                                        TextField(
-                                          controller: _busNumberController,
-                                          decoration: const InputDecoration(hintText: 'رقم الباص'),
-                                          keyboardType: TextInputType.text,
-                                          textAlign: TextAlign.right,
+                                        // Dropdown لعرض الباصات المتاحة فقط
+                                        StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+                                            stream: FirebaseFirestore.instance
+                                              .collection('buses')
+                                              .snapshots(),
+                                          builder: (context, busSnapshot) {
+                                            if (busSnapshot.hasError) {
+                                              return Text('تعذر تحميل الباصات', style: TextStyle(color: Colors.red.shade700));
+                                            }
+                                            if (!busSnapshot.hasData) {
+                                              return const Center(child: CircularProgressIndicator());
+                                            }
+                                            final allBuses = busSnapshot.data!.docs;
+                                            // جلب أرقام الباصات التي لها سائق
+                                            final takenBusNumbers = drivers.map((d) => d['bus_number']?.toString()).toSet();
+                                            // جميع الباصات التي ليس لها سائق
+                                            final availableBuses = allBuses.where((busDoc) {
+                                              final busNum = busDoc['bus_number']?.toString();
+                                              return busNum != null && !takenBusNumbers.contains(busNum);
+                                            }).toList();
+                                            if (availableBuses.isEmpty) {
+                                              return const Text('لا توجد باصات متاحة حالياً لإسنادها لسائق جديد.');
+                                            }
+                                            return DropdownButtonFormField<String>(
+                                              value: selectedBusNumber,
+                                              items: availableBuses.map((busDoc) {
+                                                final busNum = busDoc['bus_number'].toString();
+                                                return DropdownMenuItem<String>(
+                                                  value: busNum,
+                                                  child: Text('باص رقم $busNum'),
+                                                );
+                                              }).toList(),
+                                              onChanged: (val) {
+                                                setStateDialog(() {
+                                                  selectedBusNumber = val;
+                                                  _busNumberController.text = val ?? '';
+                                                });
+                                              },
+                                              decoration: const InputDecoration(hintText: 'اختر رقم الباص'),
+                                            );
+                                          },
                                         ),
                                         const SizedBox(height: 32),
                                         Row(

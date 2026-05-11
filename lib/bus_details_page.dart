@@ -10,6 +10,7 @@ class BusDetailsPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final String busNumber = busData['bus_number'].toString();
+    final int? busNumberAsInt = int.tryParse(busNumber);
     final String driverId = busData['driver_id'] ?? ''; 
 
     return Directionality(
@@ -33,7 +34,7 @@ class BusDetailsPage extends StatelessWidget {
               _buildDriverSection(driverId),
 
               _buildSectionTitle('الطالبات المسجلات', Icons.groups_rounded),
-              _buildStudentsList(busNumber),
+              _buildStudentsList(busNumberAsInt ?? busNumber),
             ],
           ),
         ),
@@ -80,11 +81,11 @@ _buildInfoRow(Icons.badge_outlined, 'اسم السائق:', driverData['driver_n
     );
   }
 
-  Widget _buildStudentsList(String busNumber) {
+  Widget _buildStudentsList(dynamic busNumber) {
     return StreamBuilder<QuerySnapshot>(
       stream: FirebaseFirestore.instance
           .collection('students')
-          .where('bus_id', isEqualTo: busNumber)
+          .where('bus', isEqualTo: busNumber)
           .snapshots(),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {

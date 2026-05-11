@@ -3,10 +3,12 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 
 class AddParentScreen extends StatefulWidget {
   final Map<String, dynamic> student;
+  final String schoolId;
 
   const AddParentScreen({
     super.key,
     required this.student,
+    required this.schoolId,
   });
 
   @override
@@ -48,21 +50,53 @@ class _AddParentScreenState extends State<AddParentScreen> {
       return;
     }
 
+    final studentDocId = widget.student['id']?.toString();
+    if (studentDocId == null || studentDocId.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'تعذر الربط: الطالب غير مسجل في النظام (لا يوجد معرف مستند)',
+          ),
+        ),
+      );
+      return;
+    }
+
     setState(() => _isLoading = true);
 
     try {
       final parentId = await _generateParentId();
 
-      await FirebaseFirestore.instance.collection('parents').doc(parentId).set({
+      final parentRef =
+          FirebaseFirestore.instance.collection('parents').doc(parentId);
+      final studentRef = FirebaseFirestore.instance
+          .collection('students')
+          .doc(studentDocId);
+
+      final batch = FirebaseFirestore.instance.batch();
+
+      final studentCode = (widget.student['student_id'] ??
+              widget.student['display_id'] ??
+              '')
+          .toString();
+      batch.set(parentRef, {
         'parent_id': parentId,
         'parent_name': parentName,
         'phone': phone,
-        'school_id': 'A26001',
+        'school_id': widget.schoolId,
+        'student_doc_id': studentDocId,
+        'student_id': studentCode,
         'student_name': widget.student['name'],
         'student_bus': widget.student['bus'],
         'status': 'active',
         'created_at': FieldValue.serverTimestamp(),
       });
+
+      batch.update(studentRef, {
+        'parent_id': parentId,
+      });
+
+      await batch.commit();
 
       if (!mounted) return;
 
@@ -71,7 +105,8 @@ class _AddParentScreenState extends State<AddParentScreen> {
       );
 
       Navigator.pop(context);
-    } catch (e) {
+    } catch (_) {
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('حدث خطأ أثناء الحفظ')),
       );
@@ -142,7 +177,7 @@ class _AddParentScreenState extends State<AddParentScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'الطالبة: $studentName',
+                      'الطالب: $studentName',
                       style: const TextStyle(
                         fontSize: 16,
                         fontWeight: FontWeight.bold,

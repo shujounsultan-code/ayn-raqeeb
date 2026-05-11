@@ -12,7 +12,6 @@ class AddBusPage extends StatefulWidget {
 class _AddBusPageState extends State<AddBusPage> {
   final _busNumberCtrl = TextEditingController();
   final _capacityCtrl = TextEditingController();
-  final _driverNameCtrl = TextEditingController(); 
   final _formKey = GlobalKey<FormState>();
   bool _isLoading = false;
 
@@ -25,7 +24,6 @@ class _AddBusPageState extends State<AddBusPage> {
         'bus_number': int.parse(_busNumberCtrl.text.trim()),
         'capacity': int.parse(_capacityCtrl.text.trim()),
         'available_seats': int.parse(_capacityCtrl.text.trim()), 
-        'driver_name': _driverNameCtrl.text.trim(), 
         'created_at': FieldValue.serverTimestamp(),
       });
 
@@ -44,7 +42,7 @@ class _AddBusPageState extends State<AddBusPage> {
     return Directionality(
       textDirection: TextDirection.rtl,
       child: Scaffold(
-        appBar: AppBar(title: const Text('إضافة حافلة وسائق'), backgroundColor: const Color(0xFF1B7C80)),
+        appBar: AppBar(title: const Text('إضافة حافلة'), backgroundColor: const Color(0xFF1B7C80)),
         body: SingleChildScrollView(
           padding: const EdgeInsets.all(24),
           child: Form(
@@ -54,8 +52,6 @@ class _AddBusPageState extends State<AddBusPage> {
                 _buildField(_busNumberCtrl, 'رقم الحافلة', Icons.directions_bus, true),
                 const SizedBox(height: 20),
                 _buildField(_capacityCtrl, 'السعة (عدد المقاعد)', Icons.event_seat, true),
-                const SizedBox(height: 20),
-                _buildField(_driverNameCtrl, 'اسم السائق', Icons.person, false),
                 const SizedBox(height: 40),
                 SizedBox(
                   width: double.infinity, height: 55,

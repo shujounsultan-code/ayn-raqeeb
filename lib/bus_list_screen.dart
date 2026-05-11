@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_core/firebase_core.dart';
-import 'package:url_launcher/url_launcher.dart'; // اختياري: للاتصال بالسائق
+import 'package:url_launcher/url_launcher.dart';
 
 // الاستيرادات التي طلبتها
 import 'widgets/back_button_widget.dart';
@@ -116,6 +115,7 @@ class BusDetailsScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final int? busNumberAsInt = int.tryParse(busNumber);
     return Directionality(
       textDirection: TextDirection.rtl,
       child: Scaffold(
@@ -143,10 +143,13 @@ class BusDetailsScreen extends StatelessWidget {
             // قائمة الطالبات
             Expanded(
               child: StreamBuilder<QuerySnapshot>(
-                // البحث في مجموعة الطلاب عن كل من لديه bus_number يطابق هذا الباص
+                // الطلاب المسجلون على هذا الباص (الحقل الحالي bus)
                 stream: FirebaseFirestore.instance
                     .collection('students')
-                    .where('bus_id', isEqualTo: busNumber) 
+                    .where(
+                      'bus',
+                      isEqualTo: busNumberAsInt ?? busNumber,
+                    )
                     .snapshots(),
                 builder: (context, snapshot) {
                   if (snapshot.connectionState == ConnectionState.waiting) {

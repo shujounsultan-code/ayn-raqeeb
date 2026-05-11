@@ -50,17 +50,31 @@ class _DashboardPageState extends State<DashboardPage> {
       errorMessage = null;
     });
     try {
-      final busNumber = driverData != null ? driverData!['bus_number'] : null;
-      // جلب بيانات الطلاب المرتبطين بنفس الباص
+      final busNumber =
+          driverData != null ? driverData!['bus_number']?.toString().trim() : null;
+      final schoolId =
+          driverData != null ? driverData!['school_id']?.toString().trim() : null;
+      // جلب بيانات الطلاب المرتبطين بنفس المدرسة، ثم فلترتهم حسب رقم الباص
       final studentsSnapshot = await FirebaseFirestore.instance
           .collection('students')
-          .where('bus', isEqualTo: busNumber)
+          .where('school_id', isEqualTo: schoolId ?? '')
           .get();
       final List<Map<String, dynamic>> loadedStudents = [];
+      final List<Map<String, dynamic>> studentsWithLocation = [];
       for (var doc in studentsSnapshot.docs) {
         final data = doc.data();
-        if (data.containsKey('home_lat') && data.containsKey('home_lng')) {
-          loadedStudents.add({
+        final sBus = (data['bus'] ?? '').toString().trim();
+        if ((busNumber ?? '').isEmpty || sBus != (busNumber ?? '')) {
+          continue;
+        }
+        loadedStudents.add({
+          'name': data['name'] ?? '',
+          'lat': data['home_lat'],
+          'lng': data['home_lng'],
+          'grade': data['grade'] ?? '',
+        });
+        if (data['home_lat'] is num && data['home_lng'] is num) {
+          studentsWithLocation.add({
             'name': data['name'] ?? '',
             'lat': data['home_lat'],
             'lng': data['home_lng'],
@@ -68,10 +82,23 @@ class _DashboardPageState extends State<DashboardPage> {
           });
         }
       }
-      // ترتيب الطالبات حسب المسافة من المدرسة (أقرب أولاً)
-      loadedStudents.sort((a, b) {
-        final d1 = Distance().as(LengthUnit.Kilometer, schoolLocation, LatLng(a['lat'], a['lng']));
-        final d2 = Distance().as(LengthUnit.Kilometer, schoolLocation, LatLng(b['lat'], b['lng']));
+      studentsWithLocation.sort((a, b) {
+        final d1 = Distance().as(
+          LengthUnit.Kilometer,
+          schoolLocation,
+          LatLng(
+            (a['lat'] as num).toDouble(),
+            (a['lng'] as num).toDouble(),
+          ),
+        );
+        final d2 = Distance().as(
+          LengthUnit.Kilometer,
+          schoolLocation,
+          LatLng(
+            (b['lat'] as num).toDouble(),
+            (b['lng'] as num).toDouble(),
+          ),
+        );
         return d1.compareTo(d2);
       });
       // جلب موقع الحافلة
@@ -80,9 +107,12 @@ class _DashboardPageState extends State<DashboardPage> {
       final busSnap = await FirebaseFirestore.instance.collection('bus_locations').doc(busNumber).get();
       if (busSnap.exists) {
         final data = busSnap.data();
-        if (data != null && data.containsKey('lat') && data.containsKey('lng')) {
-          busLoc = LatLng(data['lat'], data['lng']);
-          if (data.containsKey('accuracy')) accuracy = data['accuracy'] * 1.0;
+        if (data != null && data['lat'] is num && data['lng'] is num) {
+          busLoc = LatLng(
+            (data['lat'] as num).toDouble(),
+            (data['lng'] as num).toDouble(),
+          );
+          accuracy = (data['accuracy'] as num?)?.toDouble() ?? 50.0;
         }
       }
       setState(() {
@@ -92,8 +122,16 @@ class _DashboardPageState extends State<DashboardPage> {
         isLoading = false;
       });
       // fitBounds بعد التحميل
-      if (loadedStudents.isNotEmpty) {
-        final points = [schoolLocation, ...loadedStudents.map((s) => LatLng(s['lat'], s['lng']))];
+      if (studentsWithLocation.isNotEmpty) {
+        final points = [
+          schoolLocation,
+          ...studentsWithLocation.map(
+            (s) => LatLng(
+              (s['lat'] as num).toDouble(),
+              (s['lng'] as num).toDouble(),
+            ),
+          )
+        ];
         var bounds = LatLngBounds.fromPoints(points);
         Future.delayed(const Duration(milliseconds: 300), () {
           _mapController.fitBounds(bounds, options: const FitBoundsOptions(padding: EdgeInsets.all(20)));
@@ -110,6 +148,9 @@ class _DashboardPageState extends State<DashboardPage> {
 
   @override
   Widget build(BuildContext context) {
+    final studentsWithLocation = students
+        .where((s) => s['lat'] is num && s['lng'] is num)
+        .toList();
     return Directionality(
       textDirection: TextDirection.rtl,
       child: Scaffold(
@@ -168,11 +209,19 @@ class _DashboardPageState extends State<DashboardPage> {
                               userAgentPackageName: 'com.example.ayn_raqeeb_app',
                             ),
                             // Polyline route: من المدرسة إلى كل طالبة بالترتيب (متقطع)
-                            if (students.isNotEmpty)
+                            if (studentsWithLocation.isNotEmpty)
                               PolylineLayer(
                                 polylines: [
                                   Polyline(
-                                    points: [schoolLocation, ...students.map((s) => LatLng(s['lat'], s['lng']))],
+                                    points: [
+                                      schoolLocation,
+                                      ...studentsWithLocation.map(
+                                        (s) => LatLng(
+                                          (s['lat'] as num).toDouble(),
+                                          (s['lng'] as num).toDouble(),
+                                        ),
+                                      )
+                                    ],
                                     color: const Color(0xFF1B7C80),
                                     strokeWidth: 4,
                                     isDotted: true,
@@ -245,10 +294,13 @@ class _DashboardPageState extends State<DashboardPage> {
                                     ),
                                   ),
                                 // Markers الطالبات
-                                ...students.map((s) => Marker(
+                                ...studentsWithLocation.map((s) => Marker(
                                       width: 24,
                                       height: 24,
-                                      point: LatLng(s['lat'], s['lng']),
+                                      point: LatLng(
+                                        (s['lat'] as num).toDouble(),
+                                        (s['lng'] as num).toDouble(),
+                                      ),
                                       child: GestureDetector(
                                         onTap: () => _showPopup(context, '📍 ${s['name']}'),
                                         child: Container(
@@ -361,24 +413,34 @@ class _DashboardPageState extends State<DashboardPage> {
 
   String _estimateTime() {
     // تقدير الوقت (مطابق للـ JS: دقيقة لكل طالبة + 0.5 دقيقة/كم، يبدأ من المدرسة)
-    if (students.isEmpty) return '--';
+    final locStudents =
+        students.where((s) => s['lat'] is num && s['lng'] is num).toList();
+    if (locStudents.isEmpty) return '--';
     double totalDist = 0;
     LatLng prev = schoolLocation;
-    for (var s in students) {
-      totalDist += Distance().as(LengthUnit.Kilometer, prev, LatLng(s['lat'], s['lng']));
-      prev = LatLng(s['lat'], s['lng']);
+    for (var s in locStudents) {
+      final lat = (s['lat'] as num).toDouble();
+      final lng = (s['lng'] as num).toDouble();
+      final p = LatLng(lat, lng);
+      totalDist += Distance().as(LengthUnit.Kilometer, prev, p);
+      prev = p;
     }
-    final eta = math.max(5, (students.length * 1 + totalDist * 0.5).round());
+    final eta = math.max(5, (locStudents.length * 1 + totalDist * 0.5).round());
     return '$eta د';
   }
 
   String _estimateDistance() {
-    if (students.isEmpty) return '--';
+    final locStudents =
+        students.where((s) => s['lat'] is num && s['lng'] is num).toList();
+    if (locStudents.isEmpty) return '--';
     double totalDist = 0;
     LatLng prev = schoolLocation;
-    for (var s in students) {
-      totalDist += Distance().as(LengthUnit.Kilometer, prev, LatLng(s['lat'], s['lng']));
-      prev = LatLng(s['lat'], s['lng']);
+    for (var s in locStudents) {
+      final lat = (s['lat'] as num).toDouble();
+      final lng = (s['lng'] as num).toDouble();
+      final p = LatLng(lat, lng);
+      totalDist += Distance().as(LengthUnit.Kilometer, prev, p);
+      prev = p;
     }
     return '${totalDist.toStringAsFixed(1)} كم';
     // Popup بديل بسيط (Dialog)

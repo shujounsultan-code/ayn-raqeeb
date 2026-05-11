@@ -96,7 +96,14 @@ class HomeScreen extends StatelessWidget {
           context, 
           'الطالبات', 
           'assets/images/students.png', 
-          onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const StudentsScreen())),
+          onTap: () => Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => StudentsScreen(
+                schoolId: schoolId,
+              ),
+            ),
+          ),
         ),
         _buildCard(
           context, 

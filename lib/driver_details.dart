@@ -46,6 +46,8 @@ class DriverDetailsPage extends StatelessWidget {
         status = driver['status'].toString() == 'active' || driver['status'] == true ? 'نشط' : 'غير نشط';
       }
     }
+    // استخراج رقم الباص الخاص بالسائق
+    final busNumber = driver != null ? driver['bus_number'] : null;
     return Directionality(
       textDirection: TextDirection.rtl,
       child: Scaffold(
@@ -258,6 +260,58 @@ class DriverDetailsPage extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: 18),
+                // ===== قائمة الطلاب المرتبطين بنفس الباص =====
+                if (busNumber != null && busNumber.toString().isNotEmpty) ...[
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 8),
+                    child: Text(
+                      'الطلاب المسجلون في باص رقم $busNumber:',
+                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: Color(0xFF1B7C80)),
+                    ),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                    child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+                      stream: FirebaseFirestore.instance
+                          .collection('students')
+                          .where('school_id', isEqualTo: (driver?['school_id']?.toString().trim() ?? ''))
+                          .snapshots(),
+                      builder: (context, snapshot) {
+                        if (snapshot.hasError) {
+                          return Text('حدث خطأ أثناء تحميل الطلاب', style: TextStyle(color: Colors.red.shade700));
+                        }
+                        if (!snapshot.hasData) {
+                          return const Center(child: CircularProgressIndicator());
+                        }
+                        final allStudents = snapshot.data!.docs;
+                        final wantedBus = busNumber.toString().trim();
+                        final students = allStudents.where((d) {
+                          final data = d.data();
+                          final sBus = (data['bus'] ?? '').toString().trim();
+                          return sBus == wantedBus;
+                        }).toList();
+                        if (students.isEmpty) {
+                          return const Text('لا يوجد طلاب مسجلون في هذا الباص حالياً.');
+                        }
+                        return ListView.separated(
+                          shrinkWrap: true,
+                          physics: const NeverScrollableScrollPhysics(),
+                          itemCount: students.length,
+                          separatorBuilder: (context, i) => const Divider(),
+                          itemBuilder: (context, i) {
+                            final student = students[i].data();
+                            return ListTile(
+                              leading: const Icon(Icons.person, color: Color(0xFF1B7C80)),
+                              title: Text(student['name'] ?? 'بدون اسم', style: const TextStyle(fontWeight: FontWeight.w600)),
+                              subtitle: Text('الصف: ${student['grade'] ?? 'غير محدد'}'),
+                            );
+                          },
+                        );
+                      },
+                    ),
+                  ),
+                  const SizedBox(height: 18),
+                ],
               ],
             ),
           ),
