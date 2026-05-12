@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../main.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 class ParentLoginScreen extends StatefulWidget {
   const ParentLoginScreen({super.key});
@@ -12,20 +13,59 @@ class _ParentLoginScreenState extends State<ParentLoginScreen> {
   final TextEditingController idController = TextEditingController();
   final TextEditingController passwordController = TextEditingController();
 
-  void _login() {
-    if (idController.text.trim().isEmpty || passwordController.text.trim().isEmpty) {
+  bool _isLoading = false;
+  bool _obscurePassword = true;
+
+  @override
+  void dispose() {
+    idController.dispose();
+    passwordController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _login() async {
+    final parentId = idController.text.trim();
+    final password = passwordController.text.trim();
+
+    if (parentId.isEmpty || password.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('الرجاء إدخال المعرف وكلمة المرور')),
       );
       return;
     }
 
-    Navigator.pushReplacement(
-      context,
-      MaterialPageRoute(
-        builder: (context) => const ParentNavigation(),
-      ),
-    );
+    setState(() => _isLoading = true);
+    try {
+      final snap = await FirebaseFirestore.instance
+          .collection('parents')
+          .where('parent_id', isEqualTo: parentId)
+          .where('password', isEqualTo: password)
+          .limit(1)
+          .get();
+
+      if (!mounted) return;
+
+      if (snap.docs.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('المعرّف أو كلمة المرور غير صحيحة')),
+        );
+        return;
+      }
+
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+          builder: (context) => const ParentNavigation(),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('حدث خطأ: $e')),
+      );
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
   }
 
   @override
@@ -75,7 +115,7 @@ class _ParentLoginScreenState extends State<ParentLoginScreen> {
 
                   TextField(
                     controller: passwordController,
-                    obscureText: true,
+                    obscureText: _obscurePassword,
                     textAlign: TextAlign.right,
                     decoration: InputDecoration(
                       hintText: 'كلمة المرور',
@@ -84,6 +124,16 @@ class _ParentLoginScreenState extends State<ParentLoginScreen> {
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(18),
                         borderSide: BorderSide.none,
+                      ),
+                      suffixIcon: IconButton(
+                        icon: Icon(
+                          _obscurePassword ? Icons.visibility : Icons.visibility_off,
+                        ),
+                        onPressed: () {
+                          setState(() {
+                            _obscurePassword = !_obscurePassword;
+                          });
+                        },
                       ),
                     ),
                   ),
@@ -94,17 +144,19 @@ class _ParentLoginScreenState extends State<ParentLoginScreen> {
                     width: double.infinity,
                     height: 56,
                     child: ElevatedButton(
-                      onPressed: _login,
+                      onPressed: _isLoading ? null : _login,
                       style: ElevatedButton.styleFrom(
                         backgroundColor: const Color(0xFF1B7C80),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(18),
                         ),
                       ),
-                      child: const Text(
-                        'دخول',
-                        style: TextStyle(fontSize: 22, color: Colors.white),
-                      ),
+                      child: _isLoading
+                          ? const CircularProgressIndicator(color: Colors.white)
+                          : const Text(
+                              'دخول',
+                              style: TextStyle(fontSize: 22, color: Colors.white),
+                            ),
                     ),
                   ),
 

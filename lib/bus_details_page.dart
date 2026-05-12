@@ -4,14 +4,19 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 class BusDetailsPage extends StatelessWidget {
   final Map<String, dynamic> busData;
   final String busId;
+  final String schoolId;
 
-  const BusDetailsPage({super.key, required this.busData, required this.busId});
+  const BusDetailsPage({
+    super.key,
+    required this.busData,
+    required this.busId,
+    required this.schoolId,
+  });
 
   @override
   Widget build(BuildContext context) {
     final String busNumber = busData['bus_number'].toString();
     final int? busNumberAsInt = int.tryParse(busNumber);
-    final String driverId = busData['driver_id'] ?? ''; 
 
     return Directionality(
       textDirection: TextDirection.rtl,
@@ -31,10 +36,16 @@ class BusDetailsPage extends StatelessWidget {
               _buildBusHeader(),
               
               _buildSectionTitle('بيانات السائق', Icons.person_pin_rounded),
-              _buildDriverSection(driverId),
+              _buildDriverSectionByBus(
+                schoolId: schoolId,
+                busNumber: busNumber,
+              ),
 
               _buildSectionTitle('الطالبات المسجلات', Icons.groups_rounded),
-              _buildStudentsList(busNumberAsInt ?? busNumber),
+              _buildStudentsList(
+                schoolId: schoolId,
+                busNumber: busNumberAsInt ?? busNumber,
+              ),
             ],
           ),
         ),
@@ -42,23 +53,38 @@ class BusDetailsPage extends StatelessWidget {
     );
   }
 
-  Widget _buildDriverSection(String driverId) {
-    if (driverId.isEmpty) {
-      return _buildInfoCard('لم يتم ربط معرف السائق في قاعدة البيانات لهذا الباص');
-    }
-
-    return StreamBuilder<DocumentSnapshot>(
-      stream: FirebaseFirestore.instance.collection('drivers').doc(driverId).snapshots(),
+  Widget _buildDriverSectionByBus({
+    required String schoolId,
+    required String busNumber,
+  }) {
+    final wantedBus = busNumber.toString().trim();
+    return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+      stream: FirebaseFirestore.instance
+          .collection('drivers')
+          .where('school_id', isEqualTo: schoolId)
+          .snapshots(),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const Center(child: Padding(padding: EdgeInsets.all(10), child: CircularProgressIndicator()));
         }
 
-        if (!snapshot.hasData || !snapshot.data!.exists) {
-          return _buildInfoCard('لم يتم العثور على بيانات سائق بهذا المعرف في الفايربيز');
+        if (!snapshot.hasData) {
+          return const Center(child: Padding(padding: EdgeInsets.all(10), child: CircularProgressIndicator()));
         }
 
-        var driverData = snapshot.data!.data() as Map<String, dynamic>;
+        final docs = snapshot.data!.docs.where((d) {
+          final data = d.data();
+          final sBus = (data['bus_number'] ?? '').toString().trim();
+          return sBus == wantedBus;
+        }).toList();
+
+        if (docs.isEmpty) {
+          return _buildInfoCard('لا يوجد سائق مرتبط بهذه الحافلة حالياً');
+        }
+
+        final driverDoc = docs.first;
+        final driverData = driverDoc.data();
+        final driverDisplayId = (driverData['driver_id'] ?? '').toString().trim();
 
         return Container(
           margin: const EdgeInsets.symmetric(horizontal: 16),
@@ -74,24 +100,39 @@ class BusDetailsPage extends StatelessWidget {
               const Divider(height: 20),
               _buildInfoRow(Icons.phone_android, 'رقم التواصل:', driverData['phone_number'] ?? 'غير متوفر'),
               const Divider(height: 20),
-_buildInfoRow(Icons.badge_outlined, 'اسم السائق:', driverData['driver_name'] ?? 'غير مسجل'),            ],
+              _buildInfoRow(Icons.badge_outlined, 'معرف السائق:', driverDisplayId.isEmpty ? 'غير متوفر' : driverDisplayId),
+            ],
           ),
         );
       },
     );
   }
 
-  Widget _buildStudentsList(dynamic busNumber) {
+  Widget _buildStudentsList({
+    required String schoolId,
+    required dynamic busNumber,
+  }) {
     return StreamBuilder<QuerySnapshot>(
       stream: FirebaseFirestore.instance
           .collection('students')
-          .where('bus', isEqualTo: busNumber)
+          .where('school_id', isEqualTo: schoolId)
           .snapshots(),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const Center(child: CircularProgressIndicator());
         }
-        if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+        if (!snapshot.hasData) {
+          return const Center(child: CircularProgressIndicator());
+        }
+
+        final wantedBus = busNumber.toString().trim();
+        final docs = snapshot.data!.docs.where((d) {
+          final data = d.data() as Map<String, dynamic>;
+          final sBus = (data['bus'] ?? '').toString().trim();
+          return sBus == wantedBus;
+        }).toList();
+
+        if (docs.isEmpty) {
           return const Padding(
             padding: EdgeInsets.all(20.0),
             child: Center(child: Text('لا توجد طالبات في هذا الباص حالياً', style: TextStyle(fontFamily: 'Tajawal', color: Colors.grey))),
@@ -102,9 +143,9 @@ _buildInfoRow(Icons.badge_outlined, 'اسم السائق:', driverData['driver_n
           shrinkWrap: true,
           physics: const NeverScrollableScrollPhysics(),
           padding: const EdgeInsets.symmetric(horizontal: 16),
-          itemCount: snapshot.data!.docs.length,
+          itemCount: docs.length,
           itemBuilder: (context, index) {
-            var student = snapshot.data!.docs[index].data() as Map<String, dynamic>;
+            var student = docs[index].data() as Map<String, dynamic>;
             return Card(
               margin: const EdgeInsets.only(bottom: 8),
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),

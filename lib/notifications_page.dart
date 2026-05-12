@@ -3,7 +3,12 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 
 class NotificationsPage extends StatelessWidget {
   final String parentId; 
-  const NotificationsPage({Key? key, required this.parentId}) : super(key: key);
+  final String schoolId;
+  const NotificationsPage({
+    Key? key,
+    required this.parentId,
+    required this.schoolId,
+  }) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
@@ -12,7 +17,12 @@ class NotificationsPage extends StatelessWidget {
       child: Scaffold(
         appBar: AppBar(title: const Text('التنبيهات', style: TextStyle(color: Colors.white)), backgroundColor: const Color(0xFF1B7C80)),
         body: StreamBuilder<QuerySnapshot>(
-          stream: FirebaseFirestore.instance.collection('notifications').where('parent_id', isEqualTo: parentId).orderBy('time', descending: true).snapshots(),
+          stream: FirebaseFirestore.instance
+              .collection('notifications')
+              .where('school_id', isEqualTo: schoolId)
+              .where('parent_id', isEqualTo: parentId)
+              .orderBy('time', descending: true)
+              .snapshots(),
           builder: (context, snapshot) {
             if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
             return ListView.builder(

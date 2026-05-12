@@ -4,7 +4,12 @@ import 'add_bus_page.dart';
 import 'bus_details_page.dart';
 
 class BusesPage extends StatefulWidget {
-  const BusesPage({super.key});
+  final String schoolId;
+
+  const BusesPage({
+    super.key,
+    required this.schoolId,
+  });
 
   @override
   State<BusesPage> createState() => _BusesPageState();
@@ -36,14 +41,21 @@ class _BusesPageState extends State<BusesPage> {
               icon: const Icon(Icons.add_circle_outline, color: Colors.white, size: 28),
               onPressed: () => Navigator.push(
                 context,
-                MaterialPageRoute(builder: (_) => const AddBusPage()),
+                MaterialPageRoute(
+                  builder: (_) => AddBusPage(
+                    schoolId: widget.schoolId,
+                  ),
+                ),
               ),
             ),
             const SizedBox(width: 8),
           ],
         ),
         body: StreamBuilder<QuerySnapshot>(
-          stream: FirebaseFirestore.instance.collection('buses').orderBy('bus_number').snapshots(),
+          stream: FirebaseFirestore.instance
+              .collection('buses')
+              .where('school_id', isEqualTo: widget.schoolId)
+              .snapshots(),
           builder: (context, snapshot) {
             if (snapshot.connectionState == ConnectionState.waiting) {
               return Center(child: CircularProgressIndicator(color: primaryColor));
@@ -53,11 +65,20 @@ class _BusesPageState extends State<BusesPage> {
               return const Center(child: Text('لا توجد حافلات مضافة حالياً'));
             }
 
+            final docs = [...snapshot.data!.docs];
+            docs.sort((a, b) {
+              final da = a.data() as Map<String, dynamic>;
+              final db = b.data() as Map<String, dynamic>;
+              final na = num.tryParse(da['bus_number']?.toString() ?? '') ?? 0;
+              final nb = num.tryParse(db['bus_number']?.toString() ?? '') ?? 0;
+              return na.compareTo(nb);
+            });
+
             return ListView.builder(
               padding: const EdgeInsets.all(12),
-              itemCount: snapshot.data!.docs.length,
+              itemCount: docs.length,
               itemBuilder: (context, index) {
-                var doc = snapshot.data!.docs[index];
+                var doc = docs[index];
                 var data = doc.data() as Map<String, dynamic>;
 
                 return Card(
@@ -76,7 +97,11 @@ class _BusesPageState extends State<BusesPage> {
                       Navigator.push(
                         context,
                         MaterialPageRoute(
-                          builder: (_) => BusDetailsPage(busData: data, busId: doc.id),
+                          builder: (_) => BusDetailsPage(
+                            busData: data,
+                            busId: doc.id,
+                            schoolId: widget.schoolId,
+                          ),
                         ),
                       );
                     },

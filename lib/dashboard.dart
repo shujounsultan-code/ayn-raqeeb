@@ -104,7 +104,27 @@ class _DashboardPageState extends State<DashboardPage> {
       // جلب موقع الحافلة
       LatLng? busLoc;
       double? accuracy;
-      final busSnap = await FirebaseFirestore.instance.collection('bus_locations').doc(busNumber).get();
+      final busDocId = ((schoolId ?? '').isNotEmpty && (busNumber ?? '').isNotEmpty)
+          ? '${schoolId}_$busNumber'
+          : (busNumber ?? '');
+      DocumentSnapshot<Map<String, dynamic>> busSnap;
+      if (busDocId.isNotEmpty) {
+        busSnap = await FirebaseFirestore.instance
+            .collection('bus_locations')
+            .doc(busDocId)
+            .get();
+      } else {
+        busSnap = await FirebaseFirestore.instance
+            .collection('bus_locations')
+            .doc(busNumber)
+            .get();
+      }
+      if (!busSnap.exists && (busNumber ?? '').isNotEmpty) {
+        busSnap = await FirebaseFirestore.instance
+            .collection('bus_locations')
+            .doc(busNumber)
+            .get();
+      }
       if (busSnap.exists) {
         final data = busSnap.data();
         if (data != null && data['lat'] is num && data['lng'] is num) {

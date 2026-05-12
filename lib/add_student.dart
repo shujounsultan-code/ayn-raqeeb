@@ -3,9 +3,9 @@ import 'package:flutter/material.dart';
 import 'dart:math';
 
 class AddStudentScreen extends StatefulWidget {
-  final String? schoolId;
+  final String schoolId;
 
-  const AddStudentScreen({Key? key, this.schoolId}) : super(key: key);
+  const AddStudentScreen({Key? key, required this.schoolId}) : super(key: key);
 
   @override
   State<AddStudentScreen> createState() => _AddStudentScreenState();
@@ -59,7 +59,7 @@ class _AddStudentScreenState extends State<AddStudentScreen> {
         'grade': _selectedGrade,
         'parent_id': '',
         'status': 'active',
-        'school_id': widget.schoolId ?? '',
+        'school_id': widget.schoolId,
         'created_at': FieldValue.serverTimestamp(),
       });
       ScaffoldMessenger.of(context).showSnackBar(

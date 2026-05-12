@@ -47,10 +47,25 @@ class _DriversScreenState extends State<DriversScreen> {
     }
   }
 
-  String _generateDriverId() {
+  Future<String> _generateUniqueDriverId() async {
+    final fs = FirebaseFirestore.instance;
     final rand = Random();
-    final digits = List.generate(7, (_) => rand.nextInt(10)).join();
-    return 'D$digits';
+
+    for (var i = 0; i < 10; i++) {
+      final digits = List.generate(6, (_) => rand.nextInt(10)).join();
+      final candidate = 'D$digits';
+      final snap = await fs
+          .collection('drivers')
+          .where('driver_id', isEqualTo: candidate)
+          .limit(1)
+          .get();
+      if (snap.docs.isEmpty) return candidate;
+    }
+
+    final fallback = (DateTime.now().millisecondsSinceEpoch % 1000000)
+        .toString()
+        .padLeft(6, '0');
+    return 'D$fallback';
   }
 
   String _generatePassword() {
@@ -65,7 +80,7 @@ class _DriversScreenState extends State<DriversScreen> {
     final busNumber = _busNumberController.text.trim();
     if (name.isEmpty || phone.isEmpty || busNumber.isEmpty) return;
     setState(() { isAdding = true; });
-    final driverId = _generateDriverId();
+    final driverId = await _generateUniqueDriverId();
     final password = _generatePassword();
     try {
       await FirebaseFirestore.instance.collection('drivers').add({
@@ -273,6 +288,7 @@ class _DriversScreenState extends State<DriversScreen> {
                                         StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
                                             stream: FirebaseFirestore.instance
                                               .collection('buses')
+                                              .where('school_id', isEqualTo: widget.schoolId)
                                               .snapshots(),
                                           builder: (context, busSnapshot) {
                                             if (busSnapshot.hasError) {

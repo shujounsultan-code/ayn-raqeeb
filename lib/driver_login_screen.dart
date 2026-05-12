@@ -1,13 +1,9 @@
-import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
-import 'dashboard.dart';
 import 'main.dart';
 import 'widgets/back_button_widget.dart';
-import 'home_screen.dart';
-import 'main.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'driver_session.dart';
+
 
 
 class DriverLoginScreen extends StatefulWidget {
@@ -32,12 +28,20 @@ class _DriverLoginScreenState extends State<DriverLoginScreen> {
   }
 
   Future<void> _login() async {
+    final driverId = _idController.text.trim();
+    final password = _passwordController.text.trim();
+
+    if (driverId.isEmpty || password.isEmpty) {
+      _showErrorSnackBar('يرجى إدخال المعرف وكلمة المرور');
+      return;
+    }
+
     setState(() { _isLoading = true; });
     try {
       final QuerySnapshot result = await FirebaseFirestore.instance
           .collection('drivers')
-          .where('driver_id', isEqualTo: _idController.text.trim())
-          .where('password', isEqualTo: _passwordController.text.trim())
+          .where('driver_id', isEqualTo: driverId)
+          .where('password', isEqualTo: password)
           .get();
       if (result.docs.isNotEmpty) {
         // حفظ بيانات السائق في DriverSession
@@ -98,7 +102,7 @@ class _DriverLoginScreenState extends State<DriverLoginScreen> {
                       const SizedBox(height: 30),
                       TextField(
                         controller: _idController,
-                        keyboardType: TextInputType.number,
+                        keyboardType: TextInputType.text,
                         decoration: InputDecoration(
                           hintText: 'المعرّف',
                           filled: true,

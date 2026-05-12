@@ -3,7 +3,12 @@ import 'package:flutter/services.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 class AddBusPage extends StatefulWidget {
-  const AddBusPage({super.key});
+  final String schoolId;
+
+  const AddBusPage({
+    super.key,
+    required this.schoolId,
+  });
 
   @override
   State<AddBusPage> createState() => _AddBusPageState();
@@ -21,6 +26,7 @@ class _AddBusPageState extends State<AddBusPage> {
 
     try {
       await FirebaseFirestore.instance.collection('buses').add({
+        'school_id': widget.schoolId,
         'bus_number': int.parse(_busNumberCtrl.text.trim()),
         'capacity': int.parse(_capacityCtrl.text.trim()),
         'available_seats': int.parse(_capacityCtrl.text.trim()), 

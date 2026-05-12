@@ -1,3 +1,4 @@
+import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
@@ -28,15 +29,31 @@ class _AddParentScreenState extends State<AddParentScreen> {
     super.dispose();
   }
 
-  Future<String> _generateParentId() async {
-    final snapshot = await FirebaseFirestore.instance
-        .collection('parents')
-        .where('parent_id', isGreaterThanOrEqualTo: 'P266')
-        .where('parent_id', isLessThan: 'P267')
-        .get();
+  String _generatePassword() {
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+    final rand = Random();
+    return List.generate(8, (_) => chars[rand.nextInt(chars.length)]).join();
+  }
 
-    final nextNumber = snapshot.docs.length + 1;
-    return 'P266${nextNumber.toString().padLeft(2, '0')}';
+  Future<String> _generateUniqueParentId() async {
+    final fs = FirebaseFirestore.instance;
+    final rand = Random();
+
+    for (var i = 0; i < 10; i++) {
+      final digits = List.generate(6, (_) => rand.nextInt(10)).join();
+      final candidate = 'P$digits';
+      final snap = await fs
+          .collection('parents')
+          .where('parent_id', isEqualTo: candidate)
+          .limit(1)
+          .get();
+      if (snap.docs.isEmpty) return candidate;
+    }
+
+    final fallback = (DateTime.now().millisecondsSinceEpoch % 1000000)
+        .toString()
+        .padLeft(6, '0');
+    return 'P$fallback';
   }
 
   Future<void> _saveParent() async {
@@ -65,50 +82,83 @@ class _AddParentScreenState extends State<AddParentScreen> {
     setState(() => _isLoading = true);
 
     try {
-      final parentId = await _generateParentId();
+      final fs = FirebaseFirestore.instance;
+      final schoolId = widget.schoolId.trim();
 
-      final parentRef =
-          FirebaseFirestore.instance.collection('parents').doc(parentId);
-      final studentRef = FirebaseFirestore.instance
-          .collection('students')
-          .doc(studentDocId);
+      final parentQuery = await fs
+          .collection('parents')
+          .where('school_id', isEqualTo: schoolId)
+          .where('phone', isEqualTo: phone)
+          .limit(1)
+          .get();
 
-      final batch = FirebaseFirestore.instance.batch();
+      final studentRef = fs.collection('students').doc(studentDocId);
+      final batch = fs.batch();
 
       final studentCode = (widget.student['student_id'] ??
               widget.student['display_id'] ??
               '')
-          .toString();
-      batch.set(parentRef, {
-        'parent_id': parentId,
+          .toString()
+          .trim();
+
+      final bool parentAlreadyExists = parentQuery.docs.isNotEmpty;
+      late final DocumentReference<Map<String, dynamic>> parentRef;
+      String displayParentId = '';
+      String password = '';
+
+      if (parentAlreadyExists) {
+        final doc = parentQuery.docs.first;
+        parentRef = doc.reference;
+        final data = doc.data();
+        displayParentId = (data['parent_id'] ?? '').toString().trim();
+        password = (data['password'] ?? '').toString();
+      } else {
+        parentRef = fs.collection('parents').doc();
+        displayParentId = await _generateUniqueParentId();
+        password = _generatePassword();
+      }
+
+      final parentData = <String, dynamic>{
+        'parent_id': displayParentId,
         'parent_name': parentName,
         'phone': phone,
-        'school_id': widget.schoolId,
+        'school_id': schoolId,
         'student_doc_id': studentDocId,
         'student_id': studentCode,
         'student_name': widget.student['name'],
         'student_bus': widget.student['bus'],
         'status': 'active',
-        'created_at': FieldValue.serverTimestamp(),
-      });
+      };
 
-      batch.update(studentRef, {
-        'parent_id': parentId,
-      });
+      if (!parentAlreadyExists) {
+        parentData['password'] = password;
+        parentData['created_at'] = FieldValue.serverTimestamp();
+      } else if (password.isEmpty) {
+        password = _generatePassword();
+        parentData['password'] = password;
+      }
 
+      batch.set(parentRef, parentData, SetOptions(merge: true));
+      batch.update(studentRef, {'parent_id': parentRef.id});
       await batch.commit();
 
       if (!mounted) return;
 
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('تم إضافة ولي الأمر بنجاح: $parentId')),
+        SnackBar(
+          content: Text(
+            parentAlreadyExists
+                ? 'تم ربط الطالب بولي الأمر الموجود'
+                : 'تم إضافة ولي الأمر وربط الطالب به. المعرف: $displayParentId كلمة المرور: $password',
+          ),
+        ),
       );
 
       Navigator.pop(context);
-    } catch (_) {
+    } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('حدث خطأ أثناء الحفظ')),
+        SnackBar(content: Text('حدث خطأ أثناء الحفظ: $e')),
       );
     }
 

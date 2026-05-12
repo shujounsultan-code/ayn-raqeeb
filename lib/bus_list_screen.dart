@@ -6,7 +6,12 @@ import 'package:url_launcher/url_launcher.dart';
 import 'widgets/back_button_widget.dart';
 
 class BusListScreen extends StatelessWidget {
-  const BusListScreen({Key? key}) : super(key: key);
+  final String schoolId;
+
+  const BusListScreen({
+    Key? key,
+    required this.schoolId,
+  }) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
@@ -24,7 +29,10 @@ class BusListScreen extends StatelessWidget {
           ),
         ),
         body: StreamBuilder<QuerySnapshot>(
-          stream: FirebaseFirestore.instance.collection('buses').snapshots(),
+          stream: FirebaseFirestore.instance
+              .collection('buses')
+              .where('school_id', isEqualTo: schoolId)
+              .snapshots(),
           builder: (context, snapshot) {
             if (snapshot.connectionState == ConnectionState.waiting) {
               return const Center(child: CircularProgressIndicator(color: Color(0xFF1b7c80)));
@@ -70,6 +78,7 @@ class BusListScreen extends StatelessWidget {
             context,
             MaterialPageRoute(
               builder: (context) => BusDetailsScreen(
+                schoolId: schoolId,
                 busNumber: data['bus_number'] ?? '0',
                 driverName: data['driver_name'] ?? 'غير مسجل',
                 phone: data['phone_number'] ?? '',
@@ -102,12 +111,14 @@ class BusListScreen extends StatelessWidget {
 
 // --- شاشة تفاصيل الباص (السائق + الطالبات) ---
 class BusDetailsScreen extends StatelessWidget {
+  final String schoolId;
   final String busNumber;
   final String driverName;
   final String phone;
 
   const BusDetailsScreen({
     Key? key,
+    required this.schoolId,
     required this.busNumber,
     required this.driverName,
     required this.phone,
@@ -143,19 +154,26 @@ class BusDetailsScreen extends StatelessWidget {
             // قائمة الطالبات
             Expanded(
               child: StreamBuilder<QuerySnapshot>(
-                // الطلاب المسجلون على هذا الباص (الحقل الحالي bus)
                 stream: FirebaseFirestore.instance
                     .collection('students')
-                    .where(
-                      'bus',
-                      isEqualTo: busNumberAsInt ?? busNumber,
-                    )
+                    .where('school_id', isEqualTo: schoolId)
                     .snapshots(),
                 builder: (context, snapshot) {
                   if (snapshot.connectionState == ConnectionState.waiting) {
                     return const Center(child: CircularProgressIndicator());
                   }
-                  if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+                  if (!snapshot.hasData) {
+                    return const Center(child: CircularProgressIndicator());
+                  }
+
+                  final wantedBus = (busNumberAsInt ?? busNumber).toString().trim();
+                  final docs = snapshot.data!.docs.where((d) {
+                    final student = d.data() as Map<String, dynamic>;
+                    final sBus = (student['bus'] ?? '').toString().trim();
+                    return sBus == wantedBus;
+                  }).toList();
+
+                  if (docs.isEmpty) {
                     return const Center(
                       child: Text('لا توجد طالبات مضافات لهذا الباص بعد'),
                     );
@@ -163,9 +181,9 @@ class BusDetailsScreen extends StatelessWidget {
 
                   return ListView.builder(
                     padding: const EdgeInsets.symmetric(horizontal: 16),
-                    itemCount: snapshot.data!.docs.length,
+                    itemCount: docs.length,
                     itemBuilder: (context, index) {
-                      var student = snapshot.data!.docs[index].data() as Map<String, dynamic>;
+                      var student = docs[index].data() as Map<String, dynamic>;
                       return Card(
                         margin: const EdgeInsets.only(bottom: 8),
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),

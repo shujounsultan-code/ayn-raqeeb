@@ -5,6 +5,7 @@ import 'students_screen.dart';
 import 'profile_school_screen.dart';
 import 'records_screen.dart';
 import 'buses_page.dart';  
+import 'drivers_screen.dart';
 
 class HomeScreen extends StatelessWidget {
   final String schoolId;
@@ -16,11 +17,8 @@ class HomeScreen extends StatelessWidget {
     required this.schoolName,
   });
 
-  Stream<int> _getCollectionCount(String collectionName) {
-    return FirebaseFirestore.instance
-        .collection(collectionName)
-        .snapshots()
-        .map((snapshot) => snapshot.docs.length);
+  Stream<int> _getCollectionCount(Query<Map<String, dynamic>> query) {
+    return query.snapshots().map((snapshot) => snapshot.docs.length);
   }
 
   Widget _buildStatCard(Stream<int> stream, String title) {
@@ -129,6 +127,82 @@ class HomeScreen extends StatelessWidget {
                 ),
               ],
             ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildServiceTile(
+    BuildContext context,
+    String title, {
+    String? imagePath,
+    IconData? icon,
+    VoidCallback? onTap,
+  }) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(20),
+        child: Ink(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(
+              color: const Color(0xFFE8EEEE),
+              width: 1,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.04),
+                blurRadius: 16,
+                offset: const Offset(0, 8),
+              ),
+            ],
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 56,
+                height: 56,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFEAF7F7),
+                  borderRadius: BorderRadius.circular(18),
+                ),
+                child: Center(
+                  child: (imagePath != null)
+                      ? Image.asset(
+                          imagePath,
+                          width: 30,
+                          height: 30,
+                          fit: BoxFit.contain,
+                        )
+                      : Icon(
+                          icon ?? Icons.widgets_outlined,
+                          size: 28,
+                          color: const Color(0xFF1B7C80),
+                        ),
+                ),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Text(
+                  title,
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w700,
+                    color: Color(0xFF173B3D),
+                  ),
+                ),
+              ),
+              Icon(
+                Icons.chevron_left_rounded,
+                color: onTap == null ? Colors.grey.shade300 : Colors.grey.shade500,
+                size: 28,
+              ),
+            ],
           ),
         ),
       ),
@@ -319,18 +393,30 @@ class HomeScreen extends StatelessWidget {
                       Row(
                         children: [
                           _buildStatCard(
-                            _getCollectionCount('students'),
+                            _getCollectionCount(
+                              FirebaseFirestore.instance
+                                  .collection('students')
+                                  .where('school_id', isEqualTo: schoolId),
+                            ),
                             'الطالبات',
                           ),
                           const SizedBox(width: 12),
                           _buildStatCard(
-                            _getCollectionCount('buses'),
+                            _getCollectionCount(
+                              FirebaseFirestore.instance
+                                  .collection('buses')
+                                  .where('school_id', isEqualTo: schoolId),
+                            ),
                             'الباصات',
                           ),
                           const SizedBox(width: 12),
                           _buildStatCard(
-                            _getCollectionCount('trips'),
-                            'الرحلات',
+                            _getCollectionCount(
+                              FirebaseFirestore.instance
+                                  .collection('drivers')
+                                  .where('school_id', isEqualTo: schoolId),
+                            ),
+                            'السائقين',
                           ),
                         ],
                       ),
@@ -356,7 +442,7 @@ class HomeScreen extends StatelessWidget {
                               borderRadius: BorderRadius.circular(12),
                             ),
                             child: const Text(
-                              '4 خدمات',
+                              '5 خدمات',
                               style: TextStyle(
                                 fontSize: 12,
                                 color: Color(0xFF1B7C80),
@@ -367,56 +453,59 @@ class HomeScreen extends StatelessWidget {
                         ],
                       ),
                       const SizedBox(height: 16),
-                      SizedBox(
-                        height: 420,
-                        child: LayoutBuilder(
-                          builder: (context, constraints) {
-                            final bool isWide = constraints.maxWidth > 420;
-
-                            return GridView.count(
-                              padding: EdgeInsets.zero,
-                              physics: const NeverScrollableScrollPhysics(),
-                              crossAxisCount: 2,
-                              crossAxisSpacing: 16,
-                              mainAxisSpacing: 16,
-                              childAspectRatio: isWide ? 0.95 : 0.82,
-                              children: [
-                                _buildCard(
-                                  context,
-                                  'الباصات',
-                                  'assets/images/bus.png',
-                                  onTap: () => Navigator.push(
-                                    context,
-                                    MaterialPageRoute(builder: (_) => const BusesPage()),
-                                  ),
-                                ),
-                                _buildCard(
-                                  context,
-                                  'الطالبات',
-                                  'assets/images/students.png',
-                                  onTap: () => Navigator.push(
-                                    context,
-                                    MaterialPageRoute(
-                                      builder: (_) => StudentsScreen(
-                                        schoolId: schoolId,
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                                _buildCard(
-                                  context,
-                                  'الرسوم',
-                                  'assets/images/fees.png',
-                                ),
-                                _buildCard(
-                                  context,
-                                  'خريطة التتبع',
-                                  'assets/images/map.png',
-                                ),
-                              ],
-                            );
-                          },
+                      _buildServiceTile(
+                        context,
+                        'الباصات',
+                        imagePath: 'assets/images/bus.png',
+                        onTap: () => Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => BusesPage(
+                              schoolId: schoolId,
+                            ),
+                          ),
                         ),
+                      ),
+                      const SizedBox(height: 14),
+                      _buildServiceTile(
+                        context,
+                        'السائقين',
+                        icon: Icons.person_outline_rounded,
+                        onTap: () => Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => DriversScreen(
+                              schoolId: schoolId,
+                              schoolName: schoolName,
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 14),
+                      _buildServiceTile(
+                        context,
+                        'الطالبات',
+                        imagePath: 'assets/images/students.png',
+                        onTap: () => Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => StudentsScreen(
+                              schoolId: schoolId,
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 14),
+                      _buildServiceTile(
+                        context,
+                        'الرسوم',
+                        imagePath: 'assets/images/fees.png',
+                      ),
+                      const SizedBox(height: 14),
+                      _buildServiceTile(
+                        context,
+                        'خريطة التتبع',
+                        imagePath: 'assets/images/map.png',
                       ),
                       _buildBottomNav(context),
                     ],

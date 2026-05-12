@@ -255,15 +255,6 @@ class _ProfileSchoolScreenState extends State<ProfileSchoolScreen> {
                             ),
                             _buildItem(
                               context,
-                              'السائقين',
-                              Icons.people_outline,
-                              DriversScreen(
-                                schoolId: widget.schoolId,
-                                schoolName: displayName,
-                              ),
-                            ),
-                            _buildItem(
-                              context,
                               'تنبيهات الباصات',
                               Icons.notifications_outlined,
                               BusAlertsScreen(

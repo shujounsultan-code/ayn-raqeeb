@@ -329,7 +329,7 @@ class _StudentsScreenState extends State<StudentsScreen> {
                     StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
                       stream: FirebaseFirestore.instance
                           .collection('buses')
-                          .orderBy('bus_number')
+                          .where('school_id', isEqualTo: widget.schoolId)
                           .snapshots(),
                       builder: (context, snapshot) {
                         if (snapshot.hasError) {
