@@ -1,9 +1,9 @@
-
 import 'package:flutter/material.dart';
 import 'qr_scanner.dart';
 
+/// تبويب السائق: مسح رمز صعود الطالب.
 class QrCodePage extends StatelessWidget {
-  const QrCodePage({Key? key}) : super(key: key);
+  const QrCodePage({super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -11,73 +11,81 @@ class QrCodePage extends StatelessWidget {
       textDirection: TextDirection.rtl,
       child: Scaffold(
         backgroundColor: const Color(0xffebedf0),
-        body: Center(
-          child: Container(
-            width: 430,
-            constraints: const BoxConstraints(maxWidth: 430),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.1),
-                  blurRadius: 25,
-                ),
-              ],
-            ),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Padding(
-                  padding: const EdgeInsets.all(20.0),
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Container(
-                        width: 250,
-                        height: 250,
-                        margin: const EdgeInsets.only(bottom: 30),
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(0),
-                        ),
-                        child: Image.asset(
-                          'assets/images/qr.png',
-                          fit: BoxFit.cover,
-                          width: 250,
-                          height: 250,
-                        ),
-                      ),
-                      const SizedBox(height: 20),
-                      SizedBox(
-                        width: double.infinity,
-                        child: ElevatedButton(
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: const Color(0xff1b7c80),
-                            padding: const EdgeInsets.symmetric(vertical: 15),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(10),
-                            ),
-                          ),
-                          onPressed: () {
-                            Navigator.of(context).push(
-                              MaterialPageRoute(
-                                builder: (context) => QrScannerPage(),
-                              ),
-                            );
-                          },
-                          child: const Text(
-                            'دخول',
-                            style: TextStyle(
-                              fontSize: 18,
-                              fontWeight: FontWeight.bold,
-                              color: Colors.white,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ],
+        body: SafeArea(
+          child: Center(
+            child: Container(
+              width: 430,
+              constraints: const BoxConstraints(maxWidth: 430),
+              margin: const EdgeInsets.all(16),
+              padding: const EdgeInsets.all(22),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(16),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.08),
+                    blurRadius: 20,
                   ),
-                ),
-              ],
+                ],
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    Icons.qr_code_scanner,
+                    size: 72,
+                    color: Colors.teal.shade700,
+                  ),
+                  const SizedBox(height: 16),
+                  const Text(
+                    'صعود الطلاب',
+                    style: TextStyle(
+                      fontSize: 22,
+                      fontWeight: FontWeight.bold,
+                      color: Color(0xff1b7c80),
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  Text(
+                    'عند صعود طالب للحافلة، اطلب منه بطاقة الرمز من المدرسة ثم امسح الرمز بالكاميرا. سيصل ولي الأمر تنبيهاً داخل التطبيق.',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontSize: 14,
+                      height: 1.45,
+                      color: Colors.grey.shade800,
+                    ),
+                  ),
+                  const SizedBox(height: 28),
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton.icon(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xff1b7c80),
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                      onPressed: () {
+                        Navigator.of(context).push(
+                          MaterialPageRoute<void>(
+                            builder: (context) => const QrScannerPage(),
+                          ),
+                        );
+                      },
+                      icon: const Icon(Icons.photo_camera, color: Colors.white),
+                      label: const Text(
+                        'فتح الكاميرا ومسح الرمز',
+                        style: TextStyle(
+                          fontSize: 17,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
         ),

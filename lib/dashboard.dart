@@ -463,21 +463,6 @@ class _DashboardPageState extends State<DashboardPage> {
       prev = p;
     }
     return '${totalDist.toStringAsFixed(1)} كم';
-    // Popup بديل بسيط (Dialog)
-    void _showPopup(BuildContext context, String text) {
-      showDialog(
-        context: context,
-        builder: (ctx) => AlertDialog(
-          content: Text(text, textAlign: TextAlign.center, style: const TextStyle(fontSize: 16)),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(ctx).pop(),
-              child: const Text('إغلاق'),
-            ),
-          ],
-        ),
-      );
-    }
   }
 }
-// ...existing code...
+

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../main.dart';
+import '../parent_session.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 class ParentLoginScreen extends StatefulWidget {
@@ -51,6 +52,8 @@ class _ParentLoginScreenState extends State<ParentLoginScreen> {
         );
         return;
       }
+
+      ParentSession.setFromParentDocument(snap.docs.first);
 
       Navigator.pushReplacement(
         context,

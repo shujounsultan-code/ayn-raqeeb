@@ -1,9 +1,10 @@
+import 'dart:async';
+
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'firebase_options.dart';
 import 'welcome_screen.dart';
-import 'add_bus_page.dart';
-import 'buses_page.dart';
 
 // واجهات السائق
 import 'dashboard.dart';
@@ -15,6 +16,7 @@ import 'my_screens/attendance_screen.dart';
 import 'my_screens/bus_tracking_screen.dart';
 import 'my_screens/fees_payment_screen.dart';
 import 'my_screens/ai_chat_screen.dart';
+import 'parent_session.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -88,11 +90,65 @@ class _ParentNavigationState extends State<ParentNavigation> {
   double aiLeft = 300;
   double aiTop = 560;
 
+  StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? _parentNotifSub;
+
   final List<Widget> _pages = const [
     AttendanceScreen(),
     BusTrackingScreen(),
     FeesPaymentScreen(),
   ];
+
+  @override
+  void initState() {
+    super.initState();
+    _attachParentNotificationListener();
+  }
+
+  void _attachParentNotificationListener() {
+    final pid = ParentSession.parentBusinessId;
+    if (pid == null || pid.isEmpty) return;
+    _parentNotifSub = FirebaseFirestore.instance
+        .collection('parent_notifications')
+        .where('parent_id', isEqualTo: pid)
+        .snapshots()
+        .listen(_onParentNotifications);
+  }
+
+  void _onParentNotifications(QuerySnapshot<Map<String, dynamic>> snap) {
+    if (!mounted) return;
+    final started = ParentSession.sessionStartedAt;
+    for (final change in snap.docChanges) {
+      if (change.type != DocumentChangeType.added) continue;
+      final doc = change.doc;
+      final data = doc.data();
+      if (data == null) continue;
+      if (data['read'] == true) continue;
+      final ts = data['created_at'];
+      if (started != null && ts is Timestamp) {
+        if (!ts
+            .toDate()
+            .isAfter(started.subtract(const Duration(seconds: 3)))) {
+          continue;
+        }
+      }
+      final body = data['body']?.toString() ??
+          data['title']?.toString() ??
+          'تنبيه جديد';
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(body, textAlign: TextAlign.right),
+          duration: const Duration(seconds: 5),
+        ),
+      );
+      doc.reference.update({'read': true});
+    }
+  }
+
+  @override
+  void dispose() {
+    _parentNotifSub?.cancel();
+    super.dispose();
+  }
 
   void _openAiChat() {
     Navigator.push(

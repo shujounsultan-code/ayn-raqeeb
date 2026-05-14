@@ -1,0 +1,107 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'driver_session.dart';
+import 'student_boarding_token.dart';
+
+/// يتحقق من رمز المسح، يطابق المدرسة والباص مع السائق، ويسجّل الحدث ويُنشئ تنبيهاً لولي الأمر.
+Future<String?> recordStudentBoardingFromScan(String raw) async {
+  final parsed = StudentBoardingToken.parse(raw);
+  if (parsed == null) {
+    return 'رمز غير صالح. استخدم رمز الطالب من تطبيق المدرسة.';
+  }
+
+  final driver = DriverSession.currentDriver;
+  if (driver == null) {
+    return 'يجب تسجيل الدخول كسائق أولاً.';
+  }
+
+  final schoolIdDriver = driver['school_id']?.toString().trim() ?? '';
+  final busNumDriver = driver['bus_number']?.toString().trim() ?? '';
+  if (schoolIdDriver.isEmpty || busNumDriver.isEmpty) {
+    return 'بيانات السائق ناقصة (مدرسة أو باص).';
+  }
+
+  final studentRef = FirebaseFirestore.instance
+      .collection('students')
+      .doc(parsed.studentDocId);
+  final st = await studentRef.get();
+  if (!st.exists || st.data() == null) {
+    return 'الطالب غير موجود في النظام.';
+  }
+  final data = st.data()!;
+
+  final schoolStudent = data['school_id']?.toString().trim() ?? '';
+  if (schoolStudent != schoolIdDriver) {
+    return 'هذا الطالب ليس من مدرستك.';
+  }
+
+  final studentBus = data['bus']?.toString().trim() ?? '';
+  if (studentBus != busNumDriver) {
+    return 'هذا الطالب غير مسجّل على باصك (باص $studentBus).';
+  }
+
+  final recent = await FirebaseFirestore.instance
+      .collection('board_events')
+      .where('student_doc_id', isEqualTo: parsed.studentDocId)
+      .limit(8)
+      .get();
+
+  final now = DateTime.now();
+  for (final d in recent.docs) {
+    final c = d.data()['created_at'];
+    if (c is Timestamp) {
+      if (now.difference(c.toDate()) < const Duration(seconds: 45)) {
+        return 'تم تسجيل صعود هذا الطالب للتو.';
+      }
+    }
+  }
+
+  var parentBusinessId = data['parent_id']?.toString().trim() ?? '';
+  if (parentBusinessId.isEmpty) {
+    final pq = await FirebaseFirestore.instance
+        .collection('parents')
+        .where('student_doc_id', isEqualTo: parsed.studentDocId)
+        .limit(1)
+        .get();
+    if (pq.docs.isNotEmpty) {
+      parentBusinessId =
+          pq.docs.first.data()['parent_id']?.toString().trim() ?? '';
+    }
+  }
+
+  final nameRaw = data['name']?.toString().trim() ?? '';
+  final studentName = nameRaw.isNotEmpty ? nameRaw : 'الطالب';
+
+  final fs = FirebaseFirestore.instance;
+  final batch = fs.batch();
+  final be = fs.collection('board_events').doc();
+  batch.set(be, {
+    'school_id': schoolIdDriver,
+    'student_doc_id': parsed.studentDocId,
+    'student_name': studentName,
+    'bus_number': busNumDriver,
+    'parent_id': parentBusinessId,
+    'driver_id': driver['driver_id'],
+    'created_at': FieldValue.serverTimestamp(),
+  });
+
+  if (parentBusinessId.isNotEmpty) {
+    final pn = fs.collection('parent_notifications').doc();
+    batch.set(pn, {
+      'parent_id': parentBusinessId,
+      'title': 'صعود للحافلة',
+      'body': 'صعد $studentName إلى الحافلة رقم $busNumDriver.',
+      'type': 'student_boarded',
+      'read': false,
+      'student_doc_id': parsed.studentDocId,
+      'bus_number': busNumDriver,
+      'created_at': FieldValue.serverTimestamp(),
+    });
+  }
+
+  await batch.commit();
+
+  if (parentBusinessId.isEmpty) {
+    return 'ok_no_parent';
+  }
+  return null;
+}
