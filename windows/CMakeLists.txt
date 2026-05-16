@@ -65,8 +65,11 @@ include(flutter/generated_plugins.cmake)
 set(BUILD_BUNDLE_DIR "$<TARGET_FILE_DIR:${BINARY_NAME}>")
 # Make the "install" step default, as it's required to run.
 set(CMAKE_VS_INCLUDE_INSTALL_TO_DEFAULT_BUILD 1)
-if(CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT)
-  set(CMAKE_INSTALL_PREFIX "${BUILD_BUNDLE_DIR}" CACHE PATH "..." FORCE)
+# تجنّب مسار Program Files من كاش CMake القديم (يسبب فشل INSTALL بدون صلاحيات مدير)
+if(CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT
+    OR CMAKE_INSTALL_PREFIX MATCHES "[Pp]rogram [Ff]iles")
+  set(CMAKE_INSTALL_PREFIX "${CMAKE_CURRENT_BINARY_DIR}/runner/Debug"
+      CACHE PATH "Flutter app bundle directory" FORCE)
 endif()
 
 set(INSTALL_BUNDLE_DATA_DIR "${CMAKE_INSTALL_PREFIX}/data")

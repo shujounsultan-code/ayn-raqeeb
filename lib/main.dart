@@ -10,6 +10,7 @@ import 'welcome_screen.dart';
 import 'dashboard.dart';
 import 'qr_code.dart';
 import 'driver_details.dart';
+import 'services/bus_location_service.dart';
 
 // واجهات ولي الأمر
 import 'my_screens/attendance_screen.dart';
@@ -54,6 +55,18 @@ class _MainNavigationState extends State<MainNavigation> {
     QrCodePage(),
     DashboardPage(),
   ];
+
+  @override
+  void initState() {
+    super.initState();
+    BusLocationService.start();
+  }
+
+  @override
+  void dispose() {
+    BusLocationService.stop();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {

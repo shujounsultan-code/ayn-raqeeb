@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'services/geocoding_service.dart';
 import 'student_firestore_maintenance.dart';
 import 'student_parent_details_screen.dart';
 
@@ -179,12 +180,14 @@ class _StudentsScreenState extends State<StudentsScreen> {
 
   void _addStudentDialog() {
     final nameController = TextEditingController();
+    final postalController = TextEditingController();
     String? selectedGradeKey;
     String? selectedBusId;
     final scaffoldMessenger = ScaffoldMessenger.of(context);
 
     Future<void> addStudentFirestore(BuildContext dialogContext) async {
       final name = nameController.text.trim();
+      final postalCode = postalController.text.trim();
       final gradeKey = selectedGradeKey;
       final busDocumentId = selectedBusId;
 
@@ -245,6 +248,7 @@ class _StudentsScreenState extends State<StudentsScreen> {
             'bus_firestore_id': busDocumentId,
             'parent_id': '',
             'status': 'active',
+            if (postalCode.isNotEmpty) 'postal_code': postalCode,
             'created_at': FieldValue.serverTimestamp(),
           });
           transaction.set(
@@ -274,6 +278,16 @@ class _StudentsScreenState extends State<StudentsScreen> {
           ),
         );
         return;
+      }
+
+      if (postalCode.isNotEmpty) {
+        final point = await GeocodingService.postalCodeToLatLng(postalCode);
+        if (point != null) {
+          await studentRef.update({
+            'home_lat': point.latitude,
+            'home_lng': point.longitude,
+          });
+        }
       }
 
       if (!dialogContext.mounted) return;
@@ -312,6 +326,17 @@ class _StudentsScreenState extends State<StudentsScreen> {
                       controller: nameController,
                       decoration:
                           const InputDecoration(labelText: 'اسم الطالب'),
+                    ),
+                    const SizedBox(height: 8),
+                    TextField(
+                      controller: postalController,
+                      keyboardType: TextInputType.number,
+                      decoration: const InputDecoration(
+                        labelText: 'الرمز البريدي (موقع المنزل)',
+                        hintText: 'مثال: 21577',
+                        helperText:
+                            'يُستخدم لعرض موقع الطالب على خريطة السائق',
+                      ),
                     ),
                     DropdownButtonFormField<String>(
                       value: selectedGradeKey,

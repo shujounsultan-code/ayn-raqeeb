@@ -1,9 +1,13 @@
-
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:geolocator/geolocator.dart';
 import 'driver_session.dart';
+import 'driver_trip_notifier.dart';
+import 'services/bus_location_service.dart';
+import 'services/geocoding_service.dart';
 import 'dart:math' as math;
 
 class DashboardPage extends StatefulWidget {
@@ -30,18 +34,212 @@ class _DashboardPageState extends State<DashboardPage> {
   }
   List<Map<String, dynamic>> students = [];
   LatLng? busLocation;
+  LatLng? schoolLocation; // موقع المدرسة (ديناميكي بناءً على موقع السائق)
+  Stream<Position>? _positionStream;
   double? busAccuracy;
   bool isLoading = true;
   String? errorMessage;
   Map<String, dynamic>? driverData;
-  final LatLng schoolLocation = const LatLng(21.4858, 40.5444); // موقع المدرسة (مثال: جدة)
   final MapController _mapController = MapController();
+  final TextEditingController _postalController = TextEditingController();
+  LatLng? _postalPreview;
+  bool _postalLoading = false;
+  String? _highlightStudentId;
 
   @override
   void initState() {
     super.initState();
     driverData = DriverSession.currentDriver;
+    // BusLocationService.start(); // تعطيل مؤقت لحل مشكلة الإذن
+    DriverTripNotifier.lastScannedStudentId.addListener(_onStudentScanned);
     fetchData();
+
+    // طلب إذن الموقع وتشغيل التتبع
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _initLocationStream();
+    });
+  }
+
+  Future<void> _initLocationStream() async {
+    debugPrint('=== بدء _initLocationStream ===');
+    
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('جاري تهيئة خدمة الموقع...')),
+    );
+    
+    // فحص خدمة الموقع
+    bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
+    debugPrint('خدمة الموقع مفعلة: $serviceEnabled');
+    
+    if (!serviceEnabled) {
+      debugPrint('خدمة الموقع غير مفعلة');
+      _showLocationServiceDialog();
+      return;
+    }
+    
+    // فحص وطلب الإذن بشكل مباشر
+    LocationPermission permission = await Geolocator.checkPermission();
+    debugPrint('إذن الموقع الحالي: $permission');
+    
+    // طلب الإذن دائماً إذا لم يكن ممنوحاً
+    if (permission == LocationPermission.denied || permission == LocationPermission.deniedForever) {
+      debugPrint('طلب إذن الموقع...');
+      permission = await Geolocator.requestPermission();
+      debugPrint('إذن الموقع بعد الطلب: $permission');
+    }
+    
+    if (permission == LocationPermission.deniedForever) {
+      debugPrint('تم رفض الإذن نهائياً');
+      _showPermissionForeverDeniedDialog();
+      return;
+    }
+    
+    if (permission == LocationPermission.denied) {
+      debugPrint('تم رفض الإذن');
+      _showPermissionDeniedDialog();
+      return;
+    }
+    
+    debugPrint('تم منح إذن الموقع، جاري تحديد الموقع...');
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('تم منح إذن الموقع، جاري تحديد الموقع...')),
+    );
+    
+    // الحصول على الموقع الحالي
+    try {
+      debugPrint('جاري الحصول على الموقع الحالي...');
+      final currentPosition = await Geolocator.getCurrentPosition(
+        desiredAccuracy: LocationAccuracy.high,
+      );
+      debugPrint('تم الحصول على الموقع: ${currentPosition.latitude}, ${currentPosition.longitude}');
+      
+      setState(() {
+        busLocation = LatLng(currentPosition.latitude, currentPosition.longitude);
+        schoolLocation = LatLng(currentPosition.latitude, currentPosition.longitude);
+        debugPrint('تم تعيين busLocation: $busLocation');
+      });
+      
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('تم تحديد موقع الحافلة: ${currentPosition.latitude.toStringAsFixed(4)}, ${currentPosition.longitude.toStringAsFixed(4)}')),
+      );
+      
+      // بدء تتبع الموقع
+      _positionStream = Geolocator.getPositionStream(
+        locationSettings: const LocationSettings(accuracy: LocationAccuracy.high),
+      );
+      _positionStream!.listen((Position position) {
+        debugPrint('موقع الباص الجديد: ${position.latitude}, ${position.longitude}');
+        setState(() {
+          busLocation = LatLng(position.latitude, position.longitude);
+        });
+        // تحديث الخريطة لموقع الباص الجديد
+        _mapController.move(LatLng(position.latitude, position.longitude), 15);
+      });
+    } catch (e) {
+      debugPrint('خطأ في الحصول على الموقع: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('خطأ في تحديد الموقع: $e')),
+      );
+    }
+    
+    debugPrint('=== انتهى _initLocationStream ===');
+  }
+
+  void _onStudentScanned() {
+    _highlightStudentId = DriverTripNotifier.lastScannedStudentId.value;
+    fetchData();
+  }
+
+  void _showLocationServiceDialog() {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        title: const Text('خدمة الموقع غير مفعلة'),
+        content: const Text('يرجى تفعيل خدمة الموقع (GPS) من إعدادات الجهاز ليتم تحديد موقع الحافلة.'),
+        actions: [
+          TextButton(
+            onPressed: () async {
+              await Geolocator.openLocationSettings();
+            },
+            child: const Text('فتح إعدادات الموقع'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showPermissionDeniedDialog() {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        title: const Text('إذن الموقع مطلوب'),
+        content: const Text('يجب منح إذن الموقع لتحديد موقع الحافلة على الخريطة.'),
+        actions: [
+          TextButton(
+            onPressed: () async {
+              Navigator.of(ctx).pop();
+              _initLocationStream();
+            },
+            child: const Text('إعادة المحاولة'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showPermissionForeverDeniedDialog() {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        title: const Text('إذن الموقع مرفوض نهائياً'),
+        content: const Text('لقد رفضت إذن الموقع نهائياً. يرجى تفعيله من إعدادات التطبيق.'),
+        actions: [
+          TextButton(
+            onPressed: () async {
+              await Geolocator.openAppSettings();
+            },
+            child: const Text('فتح إعدادات التطبيق'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  @override
+  void dispose() {
+    DriverTripNotifier.lastScannedStudentId.removeListener(_onStudentScanned);
+    _postalController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _searchByPostal() async {
+    final zip = _postalController.text.trim();
+    if (zip.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('أدخل الرمز البريدي أولاً')),
+      );
+      return;
+    }
+    setState(() => _postalLoading = true);
+    final point = await GeocodingService.postalCodeToLatLng(zip);
+    if (!mounted) return;
+    setState(() {
+      _postalLoading = false;
+      _postalPreview = point;
+    });
+    if (point == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('لم يُعثر على موقع لهذا الرمز البريدي')),
+      );
+      return;
+    }
+    _mapController.move(point, 15);
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('تم عرض الموقع على الخريطة')),
+    );
   }
 
   Future<void> fetchData() async {
@@ -50,10 +248,8 @@ class _DashboardPageState extends State<DashboardPage> {
       errorMessage = null;
     });
     try {
-      final busNumber =
-          driverData != null ? driverData!['bus_number']?.toString().trim() : null;
-      final schoolId =
-          driverData != null ? driverData!['school_id']?.toString().trim() : null;
+      final busNumber = driverData != null ? driverData!['bus_number']?.toString().trim() : null;
+      final schoolId = driverData != null ? driverData!['school_id']?.toString().trim() : null;
       // جلب بيانات الطلاب المرتبطين بنفس المدرسة، ثم فلترتهم حسب رقم الباص
       final studentsSnapshot = await FirebaseFirestore.instance
           .collection('students')
@@ -67,25 +263,44 @@ class _DashboardPageState extends State<DashboardPage> {
         if ((busNumber ?? '').isEmpty || sBus != (busNumber ?? '')) {
           continue;
         }
+        var lat = data['home_lat'];
+        var lng = data['home_lng'];
+        final postal = data['postal_code']?.toString().trim() ?? '';
+        if ((lat is! num || lng is! num) && postal.isNotEmpty) {
+          final point = await GeocodingService.postalCodeToLatLng(postal);
+          if (point != null) {
+            lat = point.latitude;
+            lng = point.longitude;
+            await doc.reference.update({
+              'home_lat': point.latitude,
+              'home_lng': point.longitude,
+            });
+          }
+        }
         loadedStudents.add({
+          'id': doc.id,
           'name': data['name'] ?? '',
-          'lat': data['home_lat'],
-          'lng': data['home_lng'],
+          'lat': lat,
+          'lng': lng,
           'grade': data['grade'] ?? '',
+          'postal_code': postal,
         });
-        if (data['home_lat'] is num && data['home_lng'] is num) {
+        if (lat is num && lng is num) {
           studentsWithLocation.add({
+            'id': doc.id,
             'name': data['name'] ?? '',
-            'lat': data['home_lat'],
-            'lng': data['home_lng'],
+            'lat': lat,
+            'lng': lng,
             'grade': data['grade'] ?? '',
           });
         }
       }
+      // استخدم موقع الحافلة اللحظي كمركز للترتيب
+      final sortAnchor = busLocation ?? schoolLocation ?? const LatLng(24.7136, 46.6753); // موقع افتراضي (الرياض)
       studentsWithLocation.sort((a, b) {
         final d1 = Distance().as(
           LengthUnit.Kilometer,
-          schoolLocation,
+          sortAnchor,
           LatLng(
             (a['lat'] as num).toDouble(),
             (a['lng'] as num).toDouble(),
@@ -93,7 +308,7 @@ class _DashboardPageState extends State<DashboardPage> {
         );
         final d2 = Distance().as(
           LengthUnit.Kilometer,
-          schoolLocation,
+          sortAnchor,
           LatLng(
             (b['lat'] as num).toDouble(),
             (b['lng'] as num).toDouble(),
@@ -101,50 +316,30 @@ class _DashboardPageState extends State<DashboardPage> {
         );
         return d1.compareTo(d2);
       });
-      // جلب موقع الحافلة
-      LatLng? busLoc;
-      double? accuracy;
-      final busDocId = ((schoolId ?? '').isNotEmpty && (busNumber ?? '').isNotEmpty)
-          ? '${schoolId}_$busNumber'
-          : (busNumber ?? '');
-      DocumentSnapshot<Map<String, dynamic>> busSnap;
-      if (busDocId.isNotEmpty) {
-        busSnap = await FirebaseFirestore.instance
-            .collection('bus_locations')
-            .doc(busDocId)
-            .get();
-      } else {
-        busSnap = await FirebaseFirestore.instance
-            .collection('bus_locations')
-            .doc(busNumber)
-            .get();
-      }
-      if (!busSnap.exists && (busNumber ?? '').isNotEmpty) {
-        busSnap = await FirebaseFirestore.instance
-            .collection('bus_locations')
-            .doc(busNumber)
-            .get();
-      }
-      if (busSnap.exists) {
-        final data = busSnap.data();
-        if (data != null && data['lat'] is num && data['lng'] is num) {
-          busLoc = LatLng(
-            (data['lat'] as num).toDouble(),
-            (data['lng'] as num).toDouble(),
-          );
-          accuracy = (data['accuracy'] as num?)?.toDouble() ?? 50.0;
-        }
-      }
+      loadedStudents.sort((a, b) {
+        if (a['lat'] is! num || a['lng'] is! num) return 1;
+        if (b['lat'] is! num || b['lng'] is! num) return -1;
+        final d1 = Distance().as(
+          LengthUnit.Kilometer,
+          sortAnchor,
+          LatLng((a['lat'] as num).toDouble(), (a['lng'] as num).toDouble()),
+        );
+        final d2 = Distance().as(
+          LengthUnit.Kilometer,
+          sortAnchor,
+          LatLng((b['lat'] as num).toDouble(), (b['lng'] as num).toDouble()),
+        );
+        return d1.compareTo(d2);
+      });
       setState(() {
         students = loadedStudents;
-        busLocation = busLoc ?? schoolLocation;
-        busAccuracy = accuracy ?? 50.0;
+        // busLocation لا يتم تعيينها هنا إطلاقاً، فقط من GPS
         isLoading = false;
       });
-      // fitBounds بعد التحميل
-      if (studentsWithLocation.isNotEmpty) {
+      // fitBounds بعد التحميل - يركز على موقع السائق والطلاب
+      if (studentsWithLocation.isNotEmpty && busLocation != null) {
         final points = [
-          schoolLocation,
+          busLocation!,
           ...studentsWithLocation.map(
             (s) => LatLng(
               (s['lat'] as num).toDouble(),
@@ -155,6 +350,11 @@ class _DashboardPageState extends State<DashboardPage> {
         var bounds = LatLngBounds.fromPoints(points);
         Future.delayed(const Duration(milliseconds: 300), () {
           _mapController.fitBounds(bounds, options: const FitBoundsOptions(padding: EdgeInsets.all(20)));
+        });
+      } else if (busLocation != null) {
+        // إذا لم يكن هناك طلاب، يركز على موقع السائق فقط
+        Future.delayed(const Duration(milliseconds: 300), () {
+          _mapController.move(busLocation!, 15);
         });
       }
     } catch (e) {
@@ -207,6 +407,7 @@ class _DashboardPageState extends State<DashboardPage> {
                       ],
                     ),
                   ),
+                  // ...تمت إزالة خانة البحث بالرمز البريدي بناءً على طلب السائق...
                   // الخريطة
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -218,8 +419,8 @@ class _DashboardPageState extends State<DashboardPage> {
                         child: FlutterMap(
                           mapController: _mapController,
                           options: MapOptions(
-                            initialCenter: busLocation ?? schoolLocation,
-                            initialZoom: 13,
+                            initialCenter: busLocation ?? schoolLocation ?? const LatLng(24.7136, 46.6753), // موقع افتراضي (الرياض)
+                            initialZoom: 15,
                             interactionOptions: const InteractionOptions(enableScrollWheel: false, enableMultiFingerGestureRace: false),
                           ),
                           children: [
@@ -228,13 +429,13 @@ class _DashboardPageState extends State<DashboardPage> {
                               subdomains: const ['a', 'b', 'c'],
                               userAgentPackageName: 'com.example.ayn_raqeeb_app',
                             ),
-                            // Polyline route: من المدرسة إلى كل طالبة بالترتيب (متقطع)
-                            if (studentsWithLocation.isNotEmpty)
+                            // Polyline route: من الحافلة إلى كل طالب بالترتيب (متقطع)
+                            if (studentsWithLocation.isNotEmpty && busLocation != null)
                               PolylineLayer(
                                 polylines: [
                                   Polyline(
                                     points: [
-                                      schoolLocation,
+                                      busLocation!,
                                       ...studentsWithLocation.map(
                                         (s) => LatLng(
                                           (s['lat'] as num).toDouble(),
@@ -267,10 +468,11 @@ class _DashboardPageState extends State<DashboardPage> {
                             MarkerLayer(
                               markers: [
                                 // Marker المدرسة
-                                Marker(
-                                  width: 32,
-                                  height: 32,
-                                  point: schoolLocation,
+                                if (schoolLocation != null)
+                                  Marker(
+                                    width: 32,
+                                    height: 32,
+                                    point: schoolLocation!,
                                   child: GestureDetector(
                                     onTap: () => _showPopup(context, '🏫 المدرسة'),
                                     child: Container(
@@ -290,55 +492,130 @@ class _DashboardPageState extends State<DashboardPage> {
                                   ),
                                 ),
                                 // Marker الحافلة
-                                if (busLocation != null)
-                                  Marker(
-                                    width: 36,
-                                    height: 36,
-                                    point: busLocation!,
+                                Marker(
+                                  width: 36,
+                                  height: 36,
+                                  point: busLocation ?? schoolLocation ?? const LatLng(24.7136, 46.6753),
                                     child: GestureDetector(
-                                      onTap: () => _showPopup(context, '🚌 حافلة 26'),
+                                    onTap: () {
+                                      final busNumber = driverData != null ? (driverData!['bus_number']?.toString() ?? '') : '';
+                                      final locationStatus = busLocation != null ? 'محدد' : 'غير محدد';
+                                      _showPopup(context, '🚌 رقم الحافلة: $busNumber\nالموقع: $locationStatus');
+                                    },
+                                    child: Container(
+                                      decoration: BoxDecoration(
+                                        color: busLocation != null ? Colors.transparent : Colors.orange.withOpacity(0.3),
+                                        shape: BoxShape.circle,
+                                        border: busLocation != null ? null : Border.all(color: Colors.orange, width: 2),
+                                      ),
+                                      child: const Text('🚌', style: TextStyle(fontSize: 32)),
+                                    ),
+                                  ),
+                                ),
+                                // موقع الرمز البريدي المُدخل
+                                if (_postalPreview != null)
+                                  Marker(
+                                    width: 30,
+                                    height: 30,
+                                    point: _postalPreview!,
+                                    child: GestureDetector(
+                                      onTap: () => _showPopup(
+                                        context,
+                                        '📮 موقع الرمز البريدي ${_postalController.text.trim()}',
+                                      ),
                                       child: Container(
                                         decoration: BoxDecoration(
-                                          color: const Color(0xFFdc2626),
+                                          color: const Color(0xFF2563EB),
                                           shape: BoxShape.circle,
-                                          boxShadow: [
-                                            BoxShadow(
-                                              color: const Color(0xFFdc2626).withOpacity(0.3),
-                                              blurRadius: 8,
-                                              spreadRadius: 2,
-                                            ),
-                                          ],
+                                          border: Border.all(
+                                            color: Colors.white,
+                                            width: 2,
+                                          ),
                                         ),
-                                        child: const Center(child: Text('🚌', style: TextStyle(fontSize: 18, color: Colors.white))),
+                                        child: const Center(
+                                          child: Text(
+                                            '📮',
+                                            style: TextStyle(fontSize: 14),
+                                          ),
+                                        ),
                                       ),
                                     ),
                                   ),
                                 // Markers الطالبات
-                                ...studentsWithLocation.map((s) => Marker(
-                                      width: 24,
-                                      height: 24,
-                                      point: LatLng(
-                                        (s['lat'] as num).toDouble(),
-                                        (s['lng'] as num).toDouble(),
-                                      ),
-                                      child: GestureDetector(
-                                        onTap: () => _showPopup(context, '📍 ${s['name']}'),
-                                        child: Container(
-                                          decoration: BoxDecoration(
-                                            color: const Color(0xFFD97706),
-                                            shape: BoxShape.circle,
-                                            boxShadow: [
-                                              BoxShadow(
-                                                color: const Color(0xFFD97706).withOpacity(0.3),
-                                                blurRadius: 6,
-                                                spreadRadius: 1,
+                                ...studentsWithLocation.map((s) {
+                                  final isHighlight = s['id'] == _highlightStudentId;
+                                  final studentLat = (s['lat'] as num).toDouble();
+                                  final studentLng = (s['lng'] as num).toDouble();
+                                  return Marker(
+                                    width: isHighlight ? 34 : 24,
+                                    height: isHighlight ? 34 : 24,
+                                    point: LatLng(studentLat, studentLng),
+                                    child: GestureDetector(
+                                      onTap: () async {
+                                        showDialog(
+                                          context: context,
+                                          builder: (ctx) => AlertDialog(
+                                            title: Text(s['name'] ?? 'الطالب'),
+                                            content: const Text('هل تريد فتح المسار إلى منزل الطالب في Google Maps؟'),
+                                            actions: [
+                                              TextButton(
+                                                onPressed: () => Navigator.of(ctx).pop(),
+                                                child: const Text('إغلاق'),
+                                              ),
+                                              TextButton(
+                                                onPressed: () async {
+                                                  Navigator.of(ctx).pop();
+                                                  // موقع السائق الحالي (الحافلة)
+                                                  if (busLocation == null) {
+                                                    ScaffoldMessenger.of(context).showSnackBar(
+                                                      const SnackBar(content: Text('لم يتم تحديد موقع الحافلة بعد. يرجى تفعيل خدمة الموقع.')),
+                                                    );
+                                                    return;
+                                                  }
+                                                  final origin = '${busLocation!.latitude},${busLocation!.longitude}';
+                                                  final dest = '$studentLat,$studentLng';
+                                                  final url = Uri.parse('https://www.google.com/maps/dir/?api=1&origin=$origin&destination=$dest&travelmode=driving');
+                                                  if (await canLaunchUrl(url)) {
+                                                    await launchUrl(url, mode: LaunchMode.externalApplication);
+                                                  } else {
+                                                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('تعذر فتح Google Maps')));
+                                                  }
+                                                },
+                                                child: const Text('الانتقال إلى Google Maps'),
                                               ),
                                             ],
                                           ),
-                                          child: const Center(child: Text('📍', style: TextStyle(fontSize: 13, color: Colors.white))),
+                                        );
+                                      },
+                                      child: Container(
+                                        decoration: BoxDecoration(
+                                          color: isHighlight ? const Color(0xFF16A34A) : const Color(0xFFD97706),
+                                          shape: BoxShape.circle,
+                                          border: isHighlight
+                                              ? Border.all(color: Colors.white, width: 2)
+                                              : null,
+                                          boxShadow: [
+                                            BoxShadow(
+                                              color: (isHighlight ? const Color(0xFF16A34A) : const Color(0xFFD97706)).withOpacity(0.35),
+                                              blurRadius: isHighlight ? 8 : 6,
+                                              spreadRadius: isHighlight ? 2 : 1,
+                                            ),
+                                          ],
+                                        ),
+                                        child: Center(
+                                          child: Text(
+                                            isHighlight ? '✓' : '📍',
+                                            style: TextStyle(
+                                              fontSize: isHighlight ? 16 : 13,
+                                              color: Colors.white,
+                                              fontWeight: isHighlight ? FontWeight.bold : FontWeight.normal,
+                                            ),
+                                          ),
                                         ),
                                       ),
-                                    )),
+                                    ),
+                                  );
+                                }),
                               ],
                             ),
                           ],
@@ -401,10 +678,32 @@ class _DashboardPageState extends State<DashboardPage> {
                                     Expanded(
                                       child: Padding(
                                         padding: const EdgeInsets.symmetric(horizontal: 8.0),
-                                        child: Text(
-                                          'الاسم : ${s['name']}',
-                                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-                                          textAlign: TextAlign.right,
+                                        child: Column(
+                                          crossAxisAlignment: CrossAxisAlignment.end,
+                                          children: [
+                                            Text(
+                                              'الاسم : ${s['name']}',
+                                              style: TextStyle(
+                                                fontWeight: FontWeight.bold,
+                                                fontSize: 16,
+                                                color: s['id'] == _highlightStudentId
+                                                    ? const Color(0xFF16A34A)
+                                                    : Colors.black,
+                                              ),
+                                              textAlign: TextAlign.right,
+                                            ),
+                                            if (s['lat'] is! num || s['lng'] is! num)
+                                              Text(
+                                                (s['postal_code']?.toString().isNotEmpty == true)
+                                                    ? 'الرمز: ${s['postal_code']} — بانتظار الموقع'
+                                                    : 'لا يوجد موقع أو رمز بريدي',
+                                                style: TextStyle(
+                                                  fontSize: 12,
+                                                  color: Colors.orange.shade800,
+                                                ),
+                                                textAlign: TextAlign.right,
+                                              ),
+                                          ],
                                         ),
                                       ),
                                     ),
@@ -437,7 +736,7 @@ class _DashboardPageState extends State<DashboardPage> {
         students.where((s) => s['lat'] is num && s['lng'] is num).toList();
     if (locStudents.isEmpty) return '--';
     double totalDist = 0;
-    LatLng prev = schoolLocation;
+    LatLng prev = schoolLocation ?? busLocation ?? const LatLng(24.7136, 46.6753);
     for (var s in locStudents) {
       final lat = (s['lat'] as num).toDouble();
       final lng = (s['lng'] as num).toDouble();
@@ -454,7 +753,7 @@ class _DashboardPageState extends State<DashboardPage> {
         students.where((s) => s['lat'] is num && s['lng'] is num).toList();
     if (locStudents.isEmpty) return '--';
     double totalDist = 0;
-    LatLng prev = schoolLocation;
+    LatLng prev = schoolLocation ?? busLocation ?? const LatLng(24.7136, 46.6753);
     for (var s in locStudents) {
       final lat = (s['lat'] as num).toDouble();
       final lng = (s['lng'] as num).toDouble();

@@ -1,5 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'driver_session.dart';
+import 'driver_trip_notifier.dart';
+import 'services/geocoding_service.dart';
 import 'student_boarding_token.dart';
 
 /// يتحقق من رمز المسح، يطابق المدرسة والباص مع السائق، ويسجّل الحدث ويُنشئ تنبيهاً لولي الأمر.
@@ -99,6 +101,24 @@ Future<String?> recordStudentBoardingFromScan(String raw) async {
   }
 
   await batch.commit();
+
+  // ضمان ظهور موقع الطالب على خريطة السائق (من الإحداثيات أو الرمز البريدي)
+  final hasCoords =
+      data['home_lat'] is num && data['home_lng'] is num;
+  if (!hasCoords) {
+    final postal = data['postal_code']?.toString().trim() ?? '';
+    if (postal.isNotEmpty) {
+      final point = await GeocodingService.postalCodeToLatLng(postal);
+      if (point != null) {
+        await studentRef.update({
+          'home_lat': point.latitude,
+          'home_lng': point.longitude,
+        });
+      }
+    }
+  }
+
+  DriverTripNotifier.onStudentScanned(parsed.studentDocId);
 
   if (parentBusinessId.isEmpty) {
     return 'ok_no_parent';

@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'dart:math';
+import 'services/geocoding_service.dart';
 
 class AddStudentScreen extends StatefulWidget {
   final String schoolId;
@@ -14,6 +15,7 @@ class AddStudentScreen extends StatefulWidget {
 class _AddStudentScreenState extends State<AddStudentScreen> {
   final TextEditingController _nameController = TextEditingController();
   final TextEditingController _busIdController = TextEditingController();
+  final TextEditingController _postalController = TextEditingController();
   String? _selectedGrade;
   String _studentCode = '';
   bool _isLoading = false;
@@ -33,6 +35,14 @@ class _AddStudentScreenState extends State<AddStudentScreen> {
     _generateStudentCode();
   }
 
+  @override
+  void dispose() {
+    _nameController.dispose();
+    _busIdController.dispose();
+    _postalController.dispose();
+    super.dispose();
+  }
+
   void _generateStudentCode() {
     final random = Random();
     final code = List.generate(6, (_) => random.nextInt(10)).join();
@@ -42,7 +52,9 @@ class _AddStudentScreenState extends State<AddStudentScreen> {
   }
 
   Future<void> _addStudent() async {
-    if (_nameController.text.trim().isEmpty || _selectedGrade == null || _busIdController.text.trim().isEmpty) {
+    if (_nameController.text.trim().isEmpty ||
+        _selectedGrade == null ||
+        _busIdController.text.trim().isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('يرجى تعبئة جميع الحقول')),
       );
@@ -52,7 +64,8 @@ class _AddStudentScreenState extends State<AddStudentScreen> {
       _isLoading = true;
     });
     try {
-      await FirebaseFirestore.instance.collection('students').add({
+      final postal = _postalController.text.trim();
+      final ref = await FirebaseFirestore.instance.collection('students').add({
         'name': _nameController.text.trim(),
         'student_code': _studentCode,
         'bus': _busIdController.text.trim(),
@@ -60,25 +73,40 @@ class _AddStudentScreenState extends State<AddStudentScreen> {
         'parent_id': '',
         'status': 'active',
         'school_id': widget.schoolId,
+        if (postal.isNotEmpty) 'postal_code': postal,
         'created_at': FieldValue.serverTimestamp(),
       });
+      if (postal.isNotEmpty) {
+        final point = await GeocodingService.postalCodeToLatLng(postal);
+        if (point != null) {
+          await ref.update({
+            'home_lat': point.latitude,
+            'home_lng': point.longitude,
+          });
+        }
+      }
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('تمت إضافة الطالب بنجاح')),
       );
       _nameController.clear();
       _busIdController.clear();
+      _postalController.clear();
       _generateStudentCode();
       setState(() {
         _selectedGrade = null;
       });
     } catch (e) {
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('حدث خطأ: $e')),
       );
     } finally {
-      setState(() {
-        _isLoading = false;
-      });
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
     }
   }
 
@@ -119,6 +147,15 @@ class _AddStudentScreenState extends State<AddStudentScreen> {
                 labelText: 'رقم الحافلة',
               ),
               keyboardType: TextInputType.number,
+            ),
+            const SizedBox(height: 16),
+            TextField(
+              controller: _postalController,
+              keyboardType: TextInputType.number,
+              decoration: const InputDecoration(
+                labelText: 'الرمز البريدي (موقع المنزل)',
+                hintText: 'مثال: 21577',
+              ),
             ),
             const SizedBox(height: 16),
             TextField(
