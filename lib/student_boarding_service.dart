@@ -58,6 +58,17 @@ Future<String?> recordStudentBoardingFromScan(String raw) async {
   }
 
   var parentBusinessId = data['parent_id']?.toString().trim() ?? '';
+  if (parentBusinessId.isNotEmpty) {
+    final parentDoc = await FirebaseFirestore.instance
+        .collection('parents')
+        .doc(parentBusinessId)
+        .get();
+    if (parentDoc.exists) {
+      parentBusinessId =
+          parentDoc.data()?['parent_id']?.toString().trim() ?? parentBusinessId;
+    }
+  }
+
   if (parentBusinessId.isEmpty) {
     final pq = await FirebaseFirestore.instance
         .collection('parents')
@@ -75,28 +86,36 @@ Future<String?> recordStudentBoardingFromScan(String raw) async {
 
   final fs = FirebaseFirestore.instance;
   final batch = fs.batch();
+  final nowMs = DateTime.now().millisecondsSinceEpoch;
   final be = fs.collection('board_events').doc();
+  final busLocationDocId = '${schoolIdDriver}_$busNumDriver';
   batch.set(be, {
     'school_id': schoolIdDriver,
     'student_doc_id': parsed.studentDocId,
     'student_name': studentName,
     'bus_number': busNumDriver,
+    'bus_location_doc_id': busLocationDocId,
     'parent_id': parentBusinessId,
     'driver_id': driver['driver_id'],
     'created_at': FieldValue.serverTimestamp(),
+    'created_at_ms': nowMs,
   });
 
   if (parentBusinessId.isNotEmpty) {
     final pn = fs.collection('parent_notifications').doc();
     batch.set(pn, {
       'parent_id': parentBusinessId,
-      'title': 'صعود للحافلة',
-      'body': 'صعد $studentName إلى الحافلة رقم $busNumDriver.',
+      'title': 'بدء تتبع رحلة الطالب',
+      'body': 'تم مسح باركود $studentName وبدأ تتبع الحافلة رقم $busNumDriver.',
       'type': 'student_boarded',
       'read': false,
       'student_doc_id': parsed.studentDocId,
       'bus_number': busNumDriver,
+      'school_id': schoolIdDriver,
+      'bus_location_doc_id': busLocationDocId,
+      'driver_id': driver['driver_id'],
       'created_at': FieldValue.serverTimestamp(),
+      'created_at_ms': nowMs,
     });
   }
 

@@ -139,7 +139,7 @@ class _AddParentScreenState extends State<AddParentScreen> {
       }
 
       batch.set(parentRef, parentData, SetOptions(merge: true));
-      batch.update(studentRef, {'parent_id': parentRef.id});
+      batch.update(studentRef, {'parent_id': displayParentId});
       await batch.commit();
 
       if (!mounted) return;

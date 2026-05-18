@@ -146,13 +146,17 @@ class _DashboardPageState extends State<DashboardPage> {
       
       // بدء تتبع الموقع
       _positionStream = Geolocator.getPositionStream(
-        locationSettings: const LocationSettings(accuracy: LocationAccuracy.high),
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.best,
+          distanceFilter: 5,
+        ),
       );
       _positionStream!.listen((Position position) {
         debugPrint('موقع الباص الجديد: ${position.latitude}, ${position.longitude}');
         if (!mounted) return;
         setState(() {
           busLocation = LatLng(position.latitude, position.longitude);
+          busAccuracy = position.accuracy;
         });
         // تحديث الخريطة لموقع الباص الجديد
         _mapController.move(LatLng(position.latitude, position.longitude), 15);
@@ -828,38 +832,60 @@ class _DashboardPageState extends State<DashboardPage> {
     );
   }
 
-  String _estimateTime() {
-    // تقدير الوقت (مطابق للـ JS: دقيقة لكل طالبة + 0.5 دقيقة/كم، يبدأ من المدرسة)
-    final locStudents =
-        students.where((s) => s['lat'] is num && s['lng'] is num).toList();
-    if (locStudents.isEmpty) return '--';
-    double totalDist = 0;
-    LatLng prev = schoolLocation ?? busLocation ?? const LatLng(24.7136, 46.6753);
-    for (var s in locStudents) {
-      final lat = (s['lat'] as num).toDouble();
-      final lng = (s['lng'] as num).toDouble();
-      final p = LatLng(lat, lng);
-      totalDist += Distance().as(LengthUnit.Kilometer, prev, p);
-      prev = p;
+  LatLng? _routeOrigin() {
+    return busLocation ?? schoolLocation;
+  }
+
+  Map<String, dynamic>? _currentRouteStudent() {
+    final locStudents = students.where((s) => s['lat'] is num && s['lng'] is num).toList();
+    if (locStudents.isEmpty) return null;
+    if (_selectedStudentId != null) {
+      return locStudents.firstWhere(
+        (s) => s['id'] == _selectedStudentId,
+        orElse: () => locStudents.first,
+      );
     }
-    final eta = math.max(5, (locStudents.length * 1 + totalDist * 0.5).round());
+    final origin = _routeOrigin();
+    if (origin == null) return locStudents.first;
+    locStudents.sort((a, b) {
+      final aDist = Distance().as(
+        LengthUnit.Kilometer,
+        origin,
+        LatLng((a['lat'] as num).toDouble(), (a['lng'] as num).toDouble()),
+      );
+      final bDist = Distance().as(
+        LengthUnit.Kilometer,
+        origin,
+        LatLng((b['lat'] as num).toDouble(), (b['lng'] as num).toDouble()),
+      );
+      return aDist.compareTo(bDist);
+    });
+    return locStudents.first;
+  }
+
+  String _estimateTime() {
+    final origin = _routeOrigin();
+    final current = _currentRouteStudent();
+    if (origin == null || current == null) return '--';
+    final target = LatLng(
+      (current['lat'] as num).toDouble(),
+      (current['lng'] as num).toDouble(),
+    );
+    final dist = Distance().as(LengthUnit.Kilometer, origin, target);
+    final eta = math.max(2, (dist * 2.2).round());
     return '$eta د';
   }
 
   String _estimateDistance() {
-    final locStudents =
-        students.where((s) => s['lat'] is num && s['lng'] is num).toList();
-    if (locStudents.isEmpty) return '--';
-    double totalDist = 0;
-    LatLng prev = schoolLocation ?? busLocation ?? const LatLng(24.7136, 46.6753);
-    for (var s in locStudents) {
-      final lat = (s['lat'] as num).toDouble();
-      final lng = (s['lng'] as num).toDouble();
-      final p = LatLng(lat, lng);
-      totalDist += Distance().as(LengthUnit.Kilometer, prev, p);
-      prev = p;
-    }
-    return '${totalDist.toStringAsFixed(1)} كم';
+    final origin = _routeOrigin();
+    final current = _currentRouteStudent();
+    if (origin == null || current == null) return '--';
+    final target = LatLng(
+      (current['lat'] as num).toDouble(),
+      (current['lng'] as num).toDouble(),
+    );
+    final dist = Distance().as(LengthUnit.Kilometer, origin, target);
+    return '${dist.toStringAsFixed(1)} كم';
   }
 }
 

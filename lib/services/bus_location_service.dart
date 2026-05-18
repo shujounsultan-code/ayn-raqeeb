@@ -51,9 +51,19 @@ class BusLocationService {
 
     _docId = id;
     const settings = LocationSettings(
-      accuracy: LocationAccuracy.high,
-      distanceFilter: 20,
+      accuracy: LocationAccuracy.best,
+      distanceFilter: 5,
     );
+
+    try {
+      final currentPosition = await Geolocator.getCurrentPosition(
+        desiredAccuracy: LocationAccuracy.best,
+      );
+      await _onPosition(currentPosition);
+    } catch (_) {
+      // ignore: avoid_print
+      print('BusLocationService: failed to get current position immediately.');
+    }
 
     _positionSub = Geolocator.getPositionStream(locationSettings: settings)
         .listen(_onPosition, onError: (_) {});

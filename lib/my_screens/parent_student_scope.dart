@@ -16,6 +16,24 @@ Stream<List<DocumentSnapshot<Map<String, dynamic>>>> parentLinkedStudentsStream(
       if (snap.docs.isNotEmpty) {
         return List<DocumentSnapshot<Map<String, dynamic>>>.from(snap.docs);
       }
+
+      final parentQuery = await FirebaseFirestore.instance
+          .collection('parents')
+          .where('parent_id', isEqualTo: pid)
+          .limit(1)
+          .get();
+      if (parentQuery.docs.isNotEmpty) {
+        final parentDocId = parentQuery.docs.first.id;
+        final alternateSnap = await FirebaseFirestore.instance
+            .collection('students')
+            .where('parent_id', isEqualTo: parentDocId)
+            .get();
+        if (alternateSnap.docs.isNotEmpty) {
+          return List<DocumentSnapshot<Map<String, dynamic>>>.from(
+              alternateSnap.docs);
+        }
+      }
+
       if (fallbackSid != null && fallbackSid.isNotEmpty) {
         final d = await FirebaseFirestore.instance
             .collection('students')
