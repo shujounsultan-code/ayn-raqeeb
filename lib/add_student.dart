@@ -83,6 +83,11 @@ class _AddStudentScreenState extends State<AddStudentScreen> {
             'home_lat': point.latitude,
             'home_lng': point.longitude,
           });
+        } else {
+          if (!mounted) return;
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('تحذير: لم يتم العثور على موقع لهذا الرمز البريدي')),
+          );
         }
       }
       if (!mounted) return;

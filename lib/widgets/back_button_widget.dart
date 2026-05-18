@@ -5,14 +5,13 @@ class BackButtonWidget extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Positioned(
-      top: 6, // نفس مستوى الهيدر
-      left: 4,
+    return Padding(
+      padding: const EdgeInsets.only(top: 6, left: 4),
       child: IconButton(
         icon: const Icon(
           Icons.arrow_back_ios_new,
           size: 22,
-          color: Color(0xFF1B7C80), // لون الهوية
+          color: Color(0xFF1B7C80),
         ),
         onPressed: () {
           Navigator.pop(context);

@@ -1,9 +1,11 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'firebase_options.dart';
+import 'platform_utils.dart';
 import 'welcome_screen.dart';
 
 // واجهات السائق
@@ -59,12 +61,18 @@ class _MainNavigationState extends State<MainNavigation> {
   @override
   void initState() {
     super.initState();
-    BusLocationService.start();
+    // Skip location service on web and Windows (geolocator not supported)
+    if (!kIsWeb && !isWindows) {
+      BusLocationService.start();
+    }
   }
 
   @override
   void dispose() {
-    BusLocationService.stop();
+    // Skip location service on web and Windows (geolocator not supported)
+    if (!kIsWeb && !isWindows) {
+      BusLocationService.stop();
+    }
     super.dispose();
   }
 

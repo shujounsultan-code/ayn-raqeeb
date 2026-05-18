@@ -1,4 +1,6 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
@@ -6,8 +8,8 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:geolocator/geolocator.dart';
 import 'driver_session.dart';
 import 'driver_trip_notifier.dart';
-import 'services/bus_location_service.dart';
 import 'services/geocoding_service.dart';
+import 'platform_utils.dart';
 import 'dart:math' as math;
 
 class DashboardPage extends StatefulWidget {
@@ -45,6 +47,7 @@ class _DashboardPageState extends State<DashboardPage> {
   LatLng? _postalPreview;
   bool _postalLoading = false;
   String? _highlightStudentId;
+  String? _selectedStudentId; // الطالب المختار لعرض موقعه فقط
 
   @override
   void initState() {
@@ -61,6 +64,24 @@ class _DashboardPageState extends State<DashboardPage> {
   }
 
   Future<void> _initLocationStream() async {
+    // Skip location features on web (geolocator not supported)
+    if (kIsWeb) {
+      debugPrint('geolocator غير مدعوم على web');
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('يرجى تشغيل التطبيق على Android/iOS لاستخدام الموقع')),
+      );
+      return;
+    }
+
+    // Skip location features on Windows desktop (geolocator not supported)
+    if (isWindows) {
+      debugPrint('geolocator غير مدعوم على Windows desktop');
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('يرجى تشغيل التطبيق على Android/iOS لاستخدام الموقع')),
+      );
+      return;
+    }
+
     debugPrint('=== بدء _initLocationStream ===');
     
     ScaffoldMessenger.of(context).showSnackBar(
@@ -129,6 +150,7 @@ class _DashboardPageState extends State<DashboardPage> {
       );
       _positionStream!.listen((Position position) {
         debugPrint('موقع الباص الجديد: ${position.latitude}, ${position.longitude}');
+        if (!mounted) return;
         setState(() {
           busLocation = LatLng(position.latitude, position.longitude);
         });
@@ -158,11 +180,16 @@ class _DashboardPageState extends State<DashboardPage> {
         title: const Text('خدمة الموقع غير مفعلة'),
         content: const Text('يرجى تفعيل خدمة الموقع (GPS) من إعدادات الجهاز ليتم تحديد موقع الحافلة.'),
         actions: [
+          if (!kIsWeb && !isWindows)
+            TextButton(
+              onPressed: () async {
+                await Geolocator.openLocationSettings();
+              },
+              child: const Text('فتح إعدادات الموقع'),
+            ),
           TextButton(
-            onPressed: () async {
-              await Geolocator.openLocationSettings();
-            },
-            child: const Text('فتح إعدادات الموقع'),
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('إغلاق'),
           ),
         ],
       ),
@@ -197,11 +224,16 @@ class _DashboardPageState extends State<DashboardPage> {
         title: const Text('إذن الموقع مرفوض نهائياً'),
         content: const Text('لقد رفضت إذن الموقع نهائياً. يرجى تفعيله من إعدادات التطبيق.'),
         actions: [
+          if (!kIsWeb && !isWindows)
+            TextButton(
+              onPressed: () async {
+                await Geolocator.openAppSettings();
+              },
+              child: const Text('فتح إعدادات التطبيق'),
+            ),
           TextButton(
-            onPressed: () async {
-              await Geolocator.openAppSettings();
-            },
-            child: const Text('فتح إعدادات التطبيق'),
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('إغلاق'),
           ),
         ],
       ),
@@ -214,6 +246,8 @@ class _DashboardPageState extends State<DashboardPage> {
     _postalController.dispose();
     super.dispose();
   }
+
+  StreamSubscription<QuerySnapshot>? _studentsSubscription;
 
   Future<void> _searchByPostal() async {
     final zip = _postalController.text.trim();
@@ -243,120 +277,143 @@ class _DashboardPageState extends State<DashboardPage> {
   }
 
   Future<void> fetchData() async {
+    // إلغاء الاشتراك القديم إذا وجد
+    await _studentsSubscription?.cancel();
+    
     setState(() {
       isLoading = true;
       errorMessage = null;
     });
+    
     try {
       final busNumber = driverData != null ? driverData!['bus_number']?.toString().trim() : null;
       final schoolId = driverData != null ? driverData!['school_id']?.toString().trim() : null;
-      // جلب بيانات الطلاب المرتبطين بنفس المدرسة، ثم فلترتهم حسب رقم الباص
-      final studentsSnapshot = await FirebaseFirestore.instance
+      
+      // استخدام Stream للاستماع للتغييرات في Firestore
+      _studentsSubscription = FirebaseFirestore.instance
           .collection('students')
           .where('school_id', isEqualTo: schoolId ?? '')
-          .get();
-      final List<Map<String, dynamic>> loadedStudents = [];
-      final List<Map<String, dynamic>> studentsWithLocation = [];
-      for (var doc in studentsSnapshot.docs) {
-        final data = doc.data();
-        final sBus = (data['bus'] ?? '').toString().trim();
-        if ((busNumber ?? '').isEmpty || sBus != (busNumber ?? '')) {
-          continue;
-        }
-        var lat = data['home_lat'];
-        var lng = data['home_lng'];
-        final postal = data['postal_code']?.toString().trim() ?? '';
-        if ((lat is! num || lng is! num) && postal.isNotEmpty) {
-          final point = await GeocodingService.postalCodeToLatLng(postal);
-          if (point != null) {
-            lat = point.latitude;
-            lng = point.longitude;
-            await doc.reference.update({
-              'home_lat': point.latitude,
-              'home_lng': point.longitude,
-            });
+          .snapshots()
+          .listen((snapshot) async {
+        final List<Map<String, dynamic>> loadedStudents = [];
+        final List<Map<String, dynamic>> studentsWithLocation = [];
+        
+        for (var doc in snapshot.docs) {
+          final data = doc.data();
+          final sBus = (data['bus'] ?? '').toString().trim();
+          debugPrint('الطالب: ${data['name']}, رقم الباص: $sBus, رقم باص السائق: $busNumber');
+          if ((busNumber ?? '').isEmpty || sBus != (busNumber ?? '')) {
+            debugPrint('تخطي الطالب ${data['name']} - رقم الباص غير متطابق');
+            continue;
           }
-        }
-        loadedStudents.add({
-          'id': doc.id,
-          'name': data['name'] ?? '',
-          'lat': lat,
-          'lng': lng,
-          'grade': data['grade'] ?? '',
-          'postal_code': postal,
-        });
-        if (lat is num && lng is num) {
-          studentsWithLocation.add({
+          var lat = data['home_lat'];
+          var lng = data['home_lng'];
+          final postal = data['postal_code']?.toString().trim() ?? '';
+          debugPrint('الطالب ${data['name']}: lat=$lat, lng=$lng, postal=$postal');
+          if ((lat is! num || lng is! num) && postal.isNotEmpty) {
+            debugPrint('محاولة تحويل الرمز البريدي: $postal');
+            final point = await GeocodingService.postalCodeToLatLng(postal);
+            if (point != null) {
+              lat = point.latitude;
+              lng = point.longitude;
+              await doc.reference.update({
+                'home_lat': point.latitude,
+                'home_lng': point.longitude,
+              });
+              debugPrint('تم تحديث موقع الطالب ${data['name']}: $lat, $lng');
+            } else {
+              debugPrint('فشل تحويل الرمز البريدي: $postal');
+            }
+          }
+          loadedStudents.add({
             'id': doc.id,
             'name': data['name'] ?? '',
             'lat': lat,
             'lng': lng,
             'grade': data['grade'] ?? '',
+            'postal_code': postal,
+          });
+          if (lat is num && lng is num) {
+            studentsWithLocation.add({
+              'id': doc.id,
+              'name': data['name'] ?? '',
+              'lat': lat,
+              'lng': lng,
+              'grade': data['grade'] ?? '',
+            });
+          }
+        }
+        
+        // استخدم موقع الحافلة اللحظي كمركز للترتيب
+        final sortAnchor = busLocation ?? schoolLocation ?? const LatLng(24.7136, 46.6753);
+        studentsWithLocation.sort((a, b) {
+          final d1 = Distance().as(
+            LengthUnit.Kilometer,
+            sortAnchor,
+            LatLng(
+              (a['lat'] as num).toDouble(),
+              (a['lng'] as num).toDouble(),
+            ),
+          );
+          final d2 = Distance().as(
+            LengthUnit.Kilometer,
+            sortAnchor,
+            LatLng(
+              (b['lat'] as num).toDouble(),
+              (b['lng'] as num).toDouble(),
+            ),
+          );
+          return d1.compareTo(d2);
+        });
+        loadedStudents.sort((a, b) {
+          if (a['lat'] is! num || a['lng'] is! num) return 1;
+          if (b['lat'] is! num || b['lng'] is! num) return -1;
+          final d1 = Distance().as(
+            LengthUnit.Kilometer,
+            sortAnchor,
+            LatLng((a['lat'] as num).toDouble(), (a['lng'] as num).toDouble()),
+          );
+          final d2 = Distance().as(
+            LengthUnit.Kilometer,
+            sortAnchor,
+            LatLng((b['lat'] as num).toDouble(), (b['lng'] as num).toDouble()),
+          );
+          return d1.compareTo(d2);
+        });
+        
+        if (!mounted) return;
+        setState(() {
+          students = loadedStudents;
+          isLoading = false;
+        });
+        
+        // fitBounds بعد التحميل - يركز على موقع السائق والطلاب
+        if (studentsWithLocation.isNotEmpty && busLocation != null) {
+          final points = [
+            busLocation!,
+            ...studentsWithLocation.map(
+              (s) => LatLng(
+                (s['lat'] as num).toDouble(),
+                (s['lng'] as num).toDouble(),
+              ),
+            )
+          ];
+          var bounds = LatLngBounds.fromPoints(points);
+          Future.delayed(const Duration(milliseconds: 300), () {
+            _mapController.fitBounds(bounds, options: const FitBoundsOptions(padding: EdgeInsets.all(20)));
+          });
+        } else if (busLocation != null) {
+          Future.delayed(const Duration(milliseconds: 300), () {
+            _mapController.move(busLocation!, 15);
           });
         }
-      }
-      // استخدم موقع الحافلة اللحظي كمركز للترتيب
-      final sortAnchor = busLocation ?? schoolLocation ?? const LatLng(24.7136, 46.6753); // موقع افتراضي (الرياض)
-      studentsWithLocation.sort((a, b) {
-        final d1 = Distance().as(
-          LengthUnit.Kilometer,
-          sortAnchor,
-          LatLng(
-            (a['lat'] as num).toDouble(),
-            (a['lng'] as num).toDouble(),
-          ),
-        );
-        final d2 = Distance().as(
-          LengthUnit.Kilometer,
-          sortAnchor,
-          LatLng(
-            (b['lat'] as num).toDouble(),
-            (b['lng'] as num).toDouble(),
-          ),
-        );
-        return d1.compareTo(d2);
-      });
-      loadedStudents.sort((a, b) {
-        if (a['lat'] is! num || a['lng'] is! num) return 1;
-        if (b['lat'] is! num || b['lng'] is! num) return -1;
-        final d1 = Distance().as(
-          LengthUnit.Kilometer,
-          sortAnchor,
-          LatLng((a['lat'] as num).toDouble(), (a['lng'] as num).toDouble()),
-        );
-        final d2 = Distance().as(
-          LengthUnit.Kilometer,
-          sortAnchor,
-          LatLng((b['lat'] as num).toDouble(), (b['lng'] as num).toDouble()),
-        );
-        return d1.compareTo(d2);
-      });
-      setState(() {
-        students = loadedStudents;
-        // busLocation لا يتم تعيينها هنا إطلاقاً، فقط من GPS
-        isLoading = false;
-      });
-      // fitBounds بعد التحميل - يركز على موقع السائق والطلاب
-      if (studentsWithLocation.isNotEmpty && busLocation != null) {
-        final points = [
-          busLocation!,
-          ...studentsWithLocation.map(
-            (s) => LatLng(
-              (s['lat'] as num).toDouble(),
-              (s['lng'] as num).toDouble(),
-            ),
-          )
-        ];
-        var bounds = LatLngBounds.fromPoints(points);
-        Future.delayed(const Duration(milliseconds: 300), () {
-          _mapController.fitBounds(bounds, options: const FitBoundsOptions(padding: EdgeInsets.all(20)));
+      }, onError: (e) {
+        if (!mounted) return;
+        setState(() {
+          errorMessage = 'خطأ في جلب البيانات: $e';
+          isLoading = false;
         });
-      } else if (busLocation != null) {
-        // إذا لم يكن هناك طلاب، يركز على موقع السائق فقط
-        Future.delayed(const Duration(milliseconds: 300), () {
-          _mapController.move(busLocation!, 15);
-        });
-      }
+      });
     } catch (e) {
       setState(() {
         errorMessage = 'خطأ في جلب البيانات: $e';
@@ -368,9 +425,20 @@ class _DashboardPageState extends State<DashboardPage> {
 
   @override
   Widget build(BuildContext context) {
+    // تصفية الطلاب بناءً على الاختيار
     final studentsWithLocation = students
         .where((s) => s['lat'] is num && s['lng'] is num)
         .toList();
+    
+    // التحقق من أن الطالب المختار لا يزال موجوداً
+    if (_selectedStudentId != null && !students.any((s) => s['id'] == _selectedStudentId)) {
+      _selectedStudentId = null;
+    }
+    
+    // إذا تم اختيار طالب، عرضه فقط
+    final displayStudents = _selectedStudentId != null
+        ? studentsWithLocation.where((s) => s['id'] == _selectedStudentId).toList()
+        : studentsWithLocation;
     return Directionality(
       textDirection: TextDirection.rtl,
       child: Scaffold(
@@ -407,7 +475,37 @@ class _DashboardPageState extends State<DashboardPage> {
                       ],
                     ),
                   ),
-                  // ...تمت إزالة خانة البحث بالرمز البريدي بناءً على طلب السائق...
+                  // اختيار طالب معين لعرض موقعه
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    child: DropdownButtonFormField<String>(
+                      value: _selectedStudentId,
+                      decoration: InputDecoration(
+                        labelText: 'اختر طالب لعرض موقعه',
+                        filled: true,
+                        fillColor: Colors.white,
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: BorderSide.none,
+                        ),
+                      ),
+                      items: [
+                        const DropdownMenuItem(
+                          value: null,
+                          child: Text('عرض جميع الطلاب'),
+                        ),
+                        ...students.map((s) => DropdownMenuItem(
+                          value: s['id'],
+                          child: Text(s['name'] ?? ''),
+                        )),
+                      ],
+                      onChanged: (val) {
+                        setState(() {
+                          _selectedStudentId = val;
+                        });
+                      },
+                    ),
+                  ),
                   // الخريطة
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -430,13 +528,13 @@ class _DashboardPageState extends State<DashboardPage> {
                               userAgentPackageName: 'com.example.ayn_raqeeb_app',
                             ),
                             // Polyline route: من الحافلة إلى كل طالب بالترتيب (متقطع)
-                            if (studentsWithLocation.isNotEmpty && busLocation != null)
+                            if (displayStudents.isNotEmpty && busLocation != null)
                               PolylineLayer(
                                 polylines: [
                                   Polyline(
                                     points: [
                                       busLocation!,
-                                      ...studentsWithLocation.map(
+                                      ...displayStudents.map(
                                         (s) => LatLng(
                                           (s['lat'] as num).toDouble(),
                                           (s['lng'] as num).toDouble(),
@@ -542,7 +640,7 @@ class _DashboardPageState extends State<DashboardPage> {
                                     ),
                                   ),
                                 // Markers الطالبات
-                                ...studentsWithLocation.map((s) {
+                                ...displayStudents.map((s) {
                                   final isHighlight = s['id'] == _highlightStudentId;
                                   final studentLat = (s['lat'] as num).toDouble();
                                   final studentLng = (s['lng'] as num).toDouble();
