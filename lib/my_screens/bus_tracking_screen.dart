@@ -1,120 +1,29 @@
 import 'package:flutter/material.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:flutter_map/flutter_map.dart';
-import 'package:latlong2/latlong.dart';
-import '../parent_session.dart';
-import 'parent_student_scope.dart';
 
-/// تتبع موقع حافلة الطالب من مجموعة `bus_locations` (نفس معرف المستند المستخدم في لوحة السائق).
 class BusTrackingScreen extends StatefulWidget {
   const BusTrackingScreen({super.key});
 
   @override
-  State<BusTrackingScreen> createState() => _BusTrackingScreenState();
+  State<BusTrackingScreen> createState() => BusTrackingScreenState();
 }
 
-class _BusTrackingScreenState extends State<BusTrackingScreen> {
+class BusTrackingScreenState extends State<BusTrackingScreen> {
   static const Color teal = Color(0xFF1B7C80);
   static const Color darkBlue = Color(0xFF0B4C75);
-  static const LatLng _fallbackCenter = LatLng(21.4858, 39.1925);
 
-  final MapController _mapController = MapController();
-  String? _selectedTrackDocId;
+  int currentIndex = 1;
 
-  String _effectiveTrackDocId(
-    List<DocumentSnapshot<Map<String, dynamic>>> docs,
-  ) {
-    if (docs.isEmpty) return '';
-    final sel = _selectedTrackDocId;
-    if (sel != null && docs.any((d) => d.id == sel)) return sel;
-    return docs.first.id;
-  }
-
-  Stream<QuerySnapshot<Map<String, dynamic>>> _studentBoardEventStream(
-      String studentDocId) {
-    return FirebaseFirestore.instance
-        .collection('board_events')
-        .where('student_doc_id', isEqualTo: studentDocId)
-        .orderBy('created_at_ms', descending: true)
-        .limit(1)
-        .snapshots();
-  }
-
-  Stream<QuerySnapshot<Map<String, dynamic>>> _parentBoardEventStream() {
-    final parentId = ParentSession.parentBusinessId;
-    if (parentId == null || parentId.isEmpty) {
-      return const Stream.empty()
-          .cast<QuerySnapshot<Map<String, dynamic>>>();
-    }
-    return FirebaseFirestore.instance
-        .collection('board_events')
-        .where('parent_id', isEqualTo: parentId)
-        .orderBy('created_at_ms', descending: true)
-        .limit(1)
-        .snapshots();
-  }
-
-  bool _isBoardingActive(DocumentSnapshot<Map<String, dynamic>>? eventDoc) {
-    if (eventDoc == null || !eventDoc.exists) return false;
-    final data = eventDoc.data();
-    if (data == null) return false;
-    final ts = data['created_at'];
-    if (ts is Timestamp) {
-      final age = DateTime.now().difference(ts.toDate());
-      return age.inHours < 6;
-    }
-    final createdAtMs = data['created_at_ms'];
-    if (createdAtMs is num) {
-      final age = DateTime.now().difference(
-        DateTime.fromMillisecondsSinceEpoch(createdAtMs.toInt()),
-      );
-      return age.inHours < 6;
-    }
-    return true;
-  }
-
-  String? _boardEventLabel(DocumentSnapshot<Map<String, dynamic>>? eventDoc) {
-    if (eventDoc == null || !eventDoc.exists) return null;
-    final data = eventDoc.data();
-    if (data == null) return null;
-    final ts = data['created_at'];
-    if (ts is Timestamp) {
-      final dt = ts.toDate();
-      return 'تم مسح رمز الطالب ${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
-    }
-    final createdAtMs = data['created_at_ms'];
-    if (createdAtMs is num) {
-      final dt = DateTime.fromMillisecondsSinceEpoch(createdAtMs.toInt());
-      return 'تم مسح رمز الطالب ${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
-    }
-    return 'تم مسح رمز الطالب';
-  }
-
-  List<LatLng> _parseTrailPoints(dynamic raw) {
-    if (raw is! List) return [];
-    final points = <LatLng>[];
-    for (final item in raw) {
-      if (item is Map<String, dynamic>) {
-        final lat = item['lat'];
-        final lng = item['lng'];
-        final latVal = lat is num
-            ? lat.toDouble()
-            : double.tryParse(lat?.toString() ?? '');
-        final lngVal = lng is num
-            ? lng.toDouble()
-            : double.tryParse(lng?.toString() ?? '');
-        if (latVal != null && lngVal != null) {
-          points.add(LatLng(latVal, lngVal));
-        }
-      }
-    }
-    return points;
+  void showMessage(String text) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(text)),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.white,
+
       body: SafeArea(
         child: Column(
           children: [
@@ -123,18 +32,32 @@ class _BusTrackingScreenState extends State<BusTrackingScreen> {
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  InkWell(
-                    onTap: () {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('التنبيهات')),
-                      );
-                    },
-                    child: const Icon(
-                      Icons.notifications_none,
-                      size: 34,
-                      color: Colors.black,
-                    ),
+                  Row(
+                    children: [
+                      InkWell(
+                        onTap: () {
+                          showMessage('فتح صفحة التنبيهات');
+                        },
+                        child: const Icon(
+                          Icons.notifications_none,
+                          size: 34,
+                          color: Colors.black,
+                        ),
+                      ),
+                      const SizedBox(width: 18),
+                      InkWell(
+                        onTap: () {
+                          showMessage('فتح صفحة الرسائل');
+                        },
+                        child: const Icon(
+                          Icons.chat_bubble_outline,
+                          size: 34,
+                          color: Colors.black,
+                        ),
+                      ),
+                    ],
                   ),
+
                   Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
@@ -143,8 +66,6 @@ class _BusTrackingScreenState extends State<BusTrackingScreen> {
                         width: 95,
                         height: 70,
                         fit: BoxFit.contain,
-                        errorBuilder: (context, error, stackTrace) =>
-                            const Icon(Icons.school, size: 48, color: teal),
                       ),
                       Transform.translate(
                         offset: const Offset(0, -10),
@@ -162,461 +83,357 @@ class _BusTrackingScreenState extends State<BusTrackingScreen> {
                 ],
               ),
             ),
-            const Padding(
-              padding: EdgeInsets.symmetric(horizontal: 18),
-              child: Align(
-                alignment: Alignment.centerRight,
-                child: Text(
-                  'تتبع حافلة طفلك',
-                  style: TextStyle(
-                    fontSize: 17,
-                    fontWeight: FontWeight.w700,
-                    color: darkBlue,
-                  ),
-                ),
+
+            const SizedBox(height: 18),
+
+            Container(
+              margin: const EdgeInsets.symmetric(horizontal: 16),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 18),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: Colors.grey.shade300),
+              ),
+              child: const Column(
+                children: [
+                  TimelineRow(time: '12:40', text: 'إنتهاء اليوم الدراسي', first: true),
+                  TimelineRow(time: '12:44', text: 'تم تسجيل صعود الطالب للباص'),
+                  TimelineRow(time: '12:51', text: 'متبقي ثلاث دقائق لوصول الطالب للمنزل'),
+                  TimelineRow(time: '12:55', text: 'قد وصل الطالب للمنزل', last: true),
+                ],
               ),
             ),
-            const SizedBox(height: 8),
+
+            const SizedBox(height: 34),
+
+            const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 26),
+              child: Row(
+                children: [
+                  StepItem(icon: Icons.apartment, time: '12:40'),
+                  StepConnector(),
+                  StepItem(icon: Icons.accessible, time: '12:44'),
+                  StepConnector(),
+                  StepItem(icon: Icons.hourglass_empty, time: '12:51'),
+                  StepConnector(),
+                  StepItem(icon: Icons.home, time: '12:55', active: true),
+                ],
+              ),
+            ),
+
+            const SizedBox(height: 30),
+
             Expanded(
-              child: StreamBuilder<List<DocumentSnapshot<Map<String, dynamic>>>>(
-                stream: parentLinkedStudentsStream(),
-                builder: (context, listSnap) {
-                  if (listSnap.connectionState == ConnectionState.waiting &&
-                      !listSnap.hasData) {
-                    return const Center(child: CircularProgressIndicator());
-                  }
-                  if (listSnap.hasError) {
-                    return Center(
-                      child: Text('تعذّر التحميل: ${listSnap.error}'),
-                    );
-                  }
-                  final docs = listSnap.data ?? [];
-                  if (docs.isEmpty) {
-                    return const Center(
-                      child: Padding(
-                        padding: EdgeInsets.all(24),
-                        child: Text(
-                          'لا يوجد طالب مرتبط بحسابك. تواصل مع المدرسة لربط الطالب.',
-                          textAlign: TextAlign.center,
-                          style: TextStyle(fontSize: 15),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(12),
+                  child: Container(
+                    width: double.infinity,
+                    color: const Color(0xFFEAF1F7),
+                    child: const Stack(
+                      children: [
+                        Positioned.fill(child: FakeMap()),
+                        Positioned(
+                          left: 16,
+                          top: 16,
+                          child: MapInfoCard(),
                         ),
-                      ),
-                    );
-                  }
-
-                  final effId = _effectiveTrackDocId(docs);
-                  final st = docs.firstWhere((d) => d.id == effId);
-                  if (!st.exists || st.data() == null) {
-                    return const Center(child: Text('بيانات الطالب غير متاحة'));
-                  }
-                  final data = st.data()!;
-                  final name = data['name']?.toString() ?? '';
-                  final bus = data['bus']?.toString().trim() ?? '';
-                  final schoolId = (data['school_id'] ??
-                              ParentSession.schoolIdFromParent)
-                          ?.toString()
-                          .trim() ??
-                      '';
-
-                  if (bus.isEmpty) {
-                    return const Center(
-                      child: Padding(
-                        padding: EdgeInsets.all(20),
-                        child: Text(
-                          'لا يوجد رقم باص مسجّل لهذا الطالب.',
-                          textAlign: TextAlign.center,
-                        ),
-                      ),
-                    );
-                  }
-
-                  final busLocDocId = schoolId.isNotEmpty ? '${schoolId}_$bus' : bus;
-
-                  return Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      if (docs.length > 1)
-                        Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 16),
-                          child: DropdownButtonFormField<String>(
-                            initialValue: effId,
-                            decoration: const InputDecoration(
-                              labelText: 'تتبع باص الطالب',
-                              border: OutlineInputBorder(),
-                            ),
-                            items: docs.map((d) {
-                              final n = d.data()?['name']?.toString() ?? d.id;
-                              return DropdownMenuItem(
-                                value: d.id,
-                                child: Text(n, textAlign: TextAlign.right),
-                              );
-                            }).toList(),
-                            onChanged: (v) {
-                              if (v != null) {
-                                setState(() => _selectedTrackDocId = v);
-                              }
-                            },
+                        Positioned(
+                          right: 65,
+                          bottom: 95,
+                          child: Icon(
+                            Icons.directions_bus_filled,
+                            size: 46,
+                            color: Colors.black,
                           ),
                         ),
-                      if (docs.length > 1) const SizedBox(height: 8),
-                      Expanded(
-                        child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-                          stream: _studentBoardEventStream(st.id),
-                          builder: (context, eventSnap) {
-                            final boardEvent = eventSnap.hasData &&
-                                    eventSnap.data!.docs.isNotEmpty
-                                ? eventSnap.data!.docs.first
-                                : null;
-                            final boardEventCount = eventSnap.data?.docs.length ?? 0;
-                            final boardingActive = _isBoardingActive(boardEvent);
-                            final eventLabel = _boardEventLabel(boardEvent);
-                            final boardData = boardEvent?.data();
-                            final boardEventId = boardEvent?.id ?? 'غير موجود';
-                            final boardEventParent =
-                                boardData?['parent_id']?.toString() ?? 'غير متوفر';
-                            final selectedStudentIdFromEvent =
-                                boardData?['student_doc_id']?.toString();
-                            final selectedStudent = (selectedStudentIdFromEvent != null &&
-                                    docs.any((d) => d.id == selectedStudentIdFromEvent))
-                                ? docs.firstWhere((d) => d.id == selectedStudentIdFromEvent)
-                                : st;
-                            final selectedStudentData = selectedStudent.data()!;
-                            final name = selectedStudentData['name']?.toString() ?? '';
-                            final bus =
-                                selectedStudentData['bus']?.toString().trim() ?? '';
-                            final schoolId = (selectedStudentData['school_id'] ??
-                                        ParentSession.schoolIdFromParent)
-                                    ?.toString()
-                                    .trim() ??
-                                '';
-                            final eventBusLocDocId =
-                                schoolId.isNotEmpty ? '${schoolId}_$bus' : bus;
-                            final boardLocationDocId =
-                                boardData?['bus_location_doc_id']?.toString().trim();
-                            final boardSchoolId = boardData?
-                                    ['school_id']
-                                ?.toString()
-                                .trim() ??
-                            '';
-                            final boardBusNumber = boardData?
-                                    ['bus_number']
-                                ?.toString()
-                                .trim() ??
-                            '';
-                            final effectiveBusLocDocId =
-                                boardLocationDocId != null && boardLocationDocId.isNotEmpty
-                                    ? boardLocationDocId
-                                    : (boardSchoolId.isNotEmpty && boardBusNumber.isNotEmpty
-                                        ? '${boardSchoolId}_$boardBusNumber'
-                                        : eventBusLocDocId);
-
-                            return Column(
-                              crossAxisAlignment: CrossAxisAlignment.stretch,
-                              children: [
-                                Padding(
-                                  padding:
-                                      const EdgeInsets.symmetric(horizontal: 16),
-                                  child: Container(
-                                    padding: const EdgeInsets.all(12),
-                                    decoration: BoxDecoration(
-                                      color: boardingActive
-                                          ? const Color(0xFFE6F7FF)
-                                          : const Color(0xFFFFF4E5),
-                                      borderRadius: BorderRadius.circular(12),
-                                      border: Border.all(
-                                        color: boardingActive
-                                            ? const Color(0xFF4DA7D8)
-                                            : const Color(0xFFE1A800),
-                                      ),
-                                    ),
-                                    child: Column(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.stretch,
-                                      children: [
-                                        Text(
-                                          boardingActive
-                                              ? 'تم مسح باركود الطالب. التتبع نشط.'
-                                              : 'بانتظار مسح باركود الطالب.',
-                                          style: TextStyle(
-                                            fontWeight: FontWeight.bold,
-                                            fontSize: 14,
-                                            color: boardingActive
-                                                ? const Color(0xFF085E8A)
-                                                : const Color(0xFF7A4B00),
-                                          ),
-                                          textAlign: TextAlign.right,
-                                        ),
-                                        const SizedBox(height: 6),
-                                        Text(
-                                          eventLabel ??
-                                              'سيظهر هنا تاريخ ووقت صعود الطالب بعد المسح.',
-                                          style: TextStyle(
-                                            fontSize: 12,
-                                            color: boardingActive
-                                                ? const Color(0xFF1A4F6A)
-                                                : const Color(0xFF5A4F00),
-                                          ),
-                                          textAlign: TextAlign.right,
-                                        ),
-                                        if (!boardingActive)
-                                          const SizedBox(height: 6),
-                                        if (!boardingActive)
-                                          Text(
-                                            'لم يتم العثور على حدث صعود فعّال لهذا الطالب بعد. تحقق من أن الطالب مرتبط بحساب الوالد وأن حدث المسح تم إنشاؤه.',
-                                            style: TextStyle(
-                                              fontSize: 11,
-                                              color: const Color(0xFF7A4B00),
-                                            ),
-                                            textAlign: TextAlign.right,
-                                          ),
-                                        if (!boardingActive)
-                                          const SizedBox(height: 6),
-                                        if (!boardingActive)
-                                          Text(
-                                            'عدد سجلات board_events لهذا الطالب: $boardEventCount\nمعرّف الحدث: $boardEventId\nparent_id: $boardEventParent',
-                                            style: TextStyle(
-                                              fontSize: 11,
-                                              color: const Color(0xFF7A4B00),
-                                            ),
-                                            textAlign: TextAlign.right,
-                                          ),
-                                      ],
-                                    ),
-                                  ),
-                                ),
-                                const SizedBox(height: 10),
-                                Expanded(
-                                  child: StreamBuilder<
-                                      DocumentSnapshot<Map<String, dynamic>>>(
-                                    stream: FirebaseFirestore.instance
-                                        .collection('bus_locations')
-                                        .doc(effectiveBusLocDocId)
-                                        .snapshots(),
-                                    builder: (context, locSnap) {
-                                      LatLng center = _fallbackCenter;
-                                      double zoom = 13;
-                                      LatLng? busPoint;
-                                      double? accuracy;
-                                      List<LatLng> trailPoints = [];
-
-                                      if (locSnap.hasData &&
-                                          locSnap.data!.exists &&
-                                          locSnap.data!.data() != null) {
-                                        final ld = locSnap.data!.data()!;
-                                        if (ld['lat'] is num && ld['lng'] is num) {
-                                          busPoint = LatLng(
-                                            (ld['lat'] as num).toDouble(),
-                                            (ld['lng'] as num).toDouble(),
-                                          );
-                                          center = busPoint;
-                                          accuracy =
-                                              (ld['accuracy'] as num?)?.toDouble() ??
-                                                  45;
-                                          zoom = 14.5;
-                                        }
-                                        trailPoints = _parseTrailPoints(ld['trail']);
-                                      }
-
-                                      WidgetsBinding.instance
-                                          .addPostFrameCallback((_) {
-                                        if (busPoint != null && mounted) {
-                                          _mapController.move(busPoint, zoom);
-                                        }
-                                      });
-
-                                      return Column(
-                                        crossAxisAlignment:
-                                            CrossAxisAlignment.stretch,
-                                        children: [
-                                          Padding(
-                                            padding: const EdgeInsets.symmetric(
-                                                horizontal: 16),
-                                            child: schoolId.isNotEmpty
-                                                ? StreamBuilder<
-                                                    DocumentSnapshot<
-                                                        Map<String, dynamic>>>(
-                                                    stream: FirebaseFirestore.instance
-                                                        .collection('schools')
-                                                        .doc(schoolId)
-                                                        .snapshots(),
-                                                    builder: (context, sch) {
-                                                      final sname = sch.data
-                                                              ?.data()?['school_name']
-                                                              ?.toString() ??
-                                                          '';
-                                                      return _infoCard(
-                                                        name: name,
-                                                        bus: bus,
-                                                        busLocDocId: busLocDocId,
-                                                        busPoint: busPoint,
-                                                        schoolLine: sname.isNotEmpty
-                                                            ? 'المدرسة: $sname'
-                                                            : null,
-                                                      );
-                                                    },
-                                                  )
-                                                : _infoCard(
-                                                    name: name,
-                                                    bus: bus,
-                                                    busLocDocId: busLocDocId,
-                                                    busPoint: busPoint,
-                                                    schoolLine: null,
-                                                  ),
-                                          ),
-                                          const SizedBox(height: 10),
-                                          Expanded(
-                                            child: Padding(
-                                              padding: const EdgeInsets.fromLTRB(
-                                                  16, 0, 16, 16),
-                                              child: ClipRRect(
-                                                borderRadius:
-                                                    BorderRadius.circular(14),
-                                                child: FlutterMap(
-                                                  mapController: _mapController,
-                                                  options: MapOptions(
-                                                    initialCenter: center,
-                                                    initialZoom: zoom,
-                                                    interactionOptions:
-                                                        const InteractionOptions(
-                                                      enableScrollWheel: false,
-                                                      enableMultiFingerGestureRace:
-                                                          false,
-                                                    ),
-                                                  ),
-                                                  children: [
-                                                    TileLayer(
-                                                      urlTemplate:
-                                                          'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
-                                                      subdomains: const ['a', 'b', 'c'],
-                                                      userAgentPackageName:
-                                                          'com.example.ayn_raqeeb_app',
-                                                    ),
-                                                    if (trailPoints.isNotEmpty)
-                                                      PolylineLayer(
-                                                        polylines: [
-                                                          Polyline(
-                                                            points: trailPoints,
-                                                            color: const Color.fromRGBO(
-                                                                27, 124, 128, 0.85),
-                                                            strokeWidth: 4,
-                                                          ),
-                                                        ],
-                                                      ),
-                                                    if (busPoint != null &&
-                                                        accuracy != null)
-                                                      CircleLayer(
-                                                        circles: [
-                                                          CircleMarker(
-                                                            point: busPoint,
-                                                            color: const Color.fromRGBO(
-                                                                220, 38, 38, 0.12),
-                                                            borderStrokeWidth: 1,
-                                                            borderColor:
-                                                                const Color(0xFFdc2626),
-                                                            radius: accuracy / 2,
-                                                          ),
-                                                        ],
-                                                      ),
-                                                    if (busPoint != null)
-                                                      MarkerLayer(
-                                                        markers: [
-                                                          Marker(
-                                                            width: 44,
-                                                            height: 44,
-                                                            point: busPoint,
-                                                            child: const Icon(
-                                                              Icons.directions_bus,
-                                                              color:
-                                                                  Color(0xFFdc2626),
-                                                              size: 40,
-                                                            ),
-                                                          ),
-                                                        ],
-                                                      ),
-                                                  ],
-                                                ),
-                                              ),
-                                            ),
-                                          ),
-                                        ],
-                                      );
-                                    },
-                                  ),
-                                ),
-                              ],
-                            );
-                          },
+                        Positioned(
+                          left: 120,
+                          top: 150,
+                          child: Text(
+                            'Riyadh\nالرياض',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              color: Color(0xFFD74735),
+                              fontSize: 25,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
                         ),
-                      ),
-                    ],
-                  );
-                },
+                      ],
+                    ),
+                  ),
+                ),
               ),
             ),
           ],
         ),
       ),
-    );
-  }
 
-  Widget _infoCard({
-    required String name,
-    required String bus,
-    required String busLocDocId,
-    required LatLng? busPoint,
-    String? schoolLine,
-  }) {
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: const Color(0xFFEAF6F6),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.teal.shade100),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.end,
-        children: [
-          if (schoolLine != null) ...[
-            Text(
-              schoolLine,
-              style: const TextStyle(
-                fontWeight: FontWeight.w600,
-                fontSize: 13,
-                color: teal,
-              ),
-            ),
-            const SizedBox(height: 6),
-          ],
-          Text(
-            name.isNotEmpty ? 'الطالب: $name' : 'تتبع الباص',
-            style: const TextStyle(
-              fontWeight: FontWeight.bold,
-              fontSize: 15,
-            ),
+      bottomNavigationBar: BottomNavigationBar(
+        currentIndex: currentIndex,
+        onTap: (index) {
+          setState(() {
+            currentIndex = index;
+          });
+        },
+        type: BottomNavigationBarType.fixed,
+        selectedItemColor: teal,
+        unselectedItemColor: Colors.grey,
+        backgroundColor: Colors.white,
+        elevation: 0,
+        selectedFontSize: 13,
+        unselectedFontSize: 13,
+        iconSize: 30,
+        items: const [
+          BottomNavigationBarItem(
+            icon: Icon(Icons.home_outlined),
+            activeIcon: Icon(Icons.home),
+            label: 'الرئيسية',
           ),
-          const SizedBox(height: 4),
-          Text(
-            'الباص: $bus — مرجع الموقع: $busLocDocId',
-            style: TextStyle(
-              fontSize: 12,
-              color: Colors.grey.shade800,
-            ),
-            textAlign: TextAlign.right,
+          BottomNavigationBarItem(
+            icon: Icon(Icons.location_on_outlined),
+            activeIcon: Icon(Icons.location_on),
+            label: 'تتبع الباص',
           ),
-          if (busPoint == null)
-            Padding(
-              padding: const EdgeInsets.only(top: 8),
-              child: Text(
-                'بانتظار إرسال موقع الحافلة من جهاز السائق…',
-                style: TextStyle(
-                  fontSize: 12,
-                  color: Colors.orange.shade800,
-                ),
-                textAlign: TextAlign.right,
-              ),
-            ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.account_balance_wallet_outlined),
+            activeIcon: Icon(Icons.account_balance_wallet),
+            label: 'الرسوم',
+          ),
         ],
       ),
     );
   }
+}
+
+class TimelineRow extends StatelessWidget {
+  final String time;
+  final String text;
+  final bool first;
+  final bool last;
+
+  const TimelineRow({
+    super.key,
+    required this.time,
+    required this.text,
+    this.first = false,
+    this.last = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: 42,
+      child: Row(
+        textDirection: TextDirection.rtl,
+        children: [
+          SizedBox(
+            width: 22,
+            child: Column(
+              children: [
+                if (!first)
+                  Expanded(child: Container(width: 2, color: Colors.grey)),
+                Container(
+                  width: 15,
+                  height: 15,
+                  decoration: BoxDecoration(
+                    color: BusTrackingScreenState.teal,
+                    shape: BoxShape.circle,
+                    border: Border.all(color: Colors.white, width: 3),
+                  ),
+                ),
+                if (!last)
+                  Expanded(child: Container(width: 2, color: Colors.grey)),
+              ],
+            ),
+          ),
+          const SizedBox(width: 14),
+          Text(
+            time,
+            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(width: 18),
+          Expanded(
+            child: Text(
+              text,
+              textAlign: TextAlign.right,
+              style: const TextStyle(fontSize: 15.5),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class StepItem extends StatelessWidget {
+  final IconData icon;
+  final String time;
+  final bool active;
+
+  const StepItem({
+    super.key,
+    required this.icon,
+    required this.time,
+    this.active = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        CircleAvatar(
+          radius: 27,
+          backgroundColor: active
+              ? BusTrackingScreenState.teal
+              : Colors.grey.shade200,
+          child: Icon(
+            icon,
+            color: active ? Colors.white : BusTrackingScreenState.darkBlue,
+            size: 27,
+          ),
+        ),
+        const SizedBox(height: 10),
+        Text(
+          time,
+          style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
+        ),
+      ],
+    );
+  }
+}
+
+class StepConnector extends StatelessWidget {
+  const StepConnector({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Expanded(
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 34),
+        height: 3,
+        color: Colors.black,
+      ),
+    );
+  }
+}
+
+class MapInfoCard extends StatelessWidget {
+  const MapInfoCard({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 190,
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.95),
+        borderRadius: BorderRadius.circular(4),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.10),
+            blurRadius: 8,
+          ),
+        ],
+      ),
+      child: const Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('Riyadh', style: TextStyle(fontWeight: FontWeight.bold)),
+          SizedBox(height: 3),
+          Text('Saudi Arabia', style: TextStyle(fontSize: 12)),
+          SizedBox(height: 8),
+          Text(
+            'View larger map',
+            style: TextStyle(color: Colors.blue, fontSize: 12),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class FakeMap extends StatelessWidget {
+  const FakeMap({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return CustomPaint(
+      painter: MapPainter(),
+      child: Container(),
+    );
+  }
+}
+
+class MapPainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final roadPaint = Paint()
+      ..color = Colors.white
+      ..strokeWidth = 22
+      ..style = PaintingStyle.stroke
+      ..strokeCap = StrokeCap.round;
+
+    final roadBorder = Paint()
+      ..color = const Color(0xFFD4DEE8)
+      ..strokeWidth = 26
+      ..style = PaintingStyle.stroke
+      ..strokeCap = StrokeCap.round;
+
+    void road(List<Offset> points) {
+      final path = Path()..moveTo(points.first.dx, points.first.dy);
+      for (final p in points.skip(1)) {
+        path.lineTo(p.dx, p.dy);
+      }
+      canvas.drawPath(path, roadBorder);
+      canvas.drawPath(path, roadPaint);
+    }
+
+    road([
+      Offset(-30, size.height * .65),
+      Offset(size.width * .35, size.height * .45),
+      Offset(size.width + 40, size.height * .25),
+    ]);
+
+    road([
+      Offset(size.width * .70, -20),
+      Offset(size.width * .62, size.height * .35),
+      Offset(size.width * .70, size.height + 30),
+    ]);
+
+    road([
+      Offset(-20, size.height * .25),
+      Offset(size.width * .30, size.height * .35),
+      Offset(size.width * .55, size.height * .75),
+    ]);
+
+    road([
+      Offset(size.width * .10, size.height + 20),
+      Offset(size.width * .35, size.height * .70),
+      Offset(size.width * .55, size.height * .55),
+    ]);
+
+    final smallRoad = Paint()
+      ..color = const Color(0xFFDDE6EF)
+      ..strokeWidth = 7
+      ..style = PaintingStyle.stroke;
+
+    for (int i = 0; i < 7; i++) {
+      final y = size.height * (0.12 + i * 0.12);
+      canvas.drawLine(Offset(0, y), Offset(size.width, y - 55), smallRoad);
+    }
+
+    final blue = Paint()..color = Colors.blue.shade300;
+    final pink = Paint()..color = Colors.pink.shade300;
+
+    canvas.drawCircle(Offset(size.width * .78, size.height * .18), 8, blue);
+    canvas.drawCircle(Offset(size.width * .40, size.height * .78), 8, blue);
+    canvas.drawCircle(Offset(size.width * .28, size.height * .70), 8, pink);
+    canvas.drawCircle(Offset(size.width * .55, size.height * .67), 8, pink);
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
