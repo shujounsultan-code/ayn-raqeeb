@@ -22,7 +22,9 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
       _showMessage('اختر الطالب أولاً');
       return;
     }
+
     setState(() => _status = newStatus);
+
     try {
       await FirebaseFirestore.instance.collection('parent_attendance').add({
         'parent_id': pid,
@@ -30,7 +32,9 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
         'status': newStatus,
         'created_at': FieldValue.serverTimestamp(),
       });
+
       if (!mounted) return;
+
       _showMessage(
         newStatus == 'حاضر'
             ? 'تم تسجيل حضور الطالب'
@@ -87,11 +91,17 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 20),
                 child: Row(
+                  textDirection: TextDirection.ltr,
                   children: [
                     InkWell(
                       onTap: () =>
                           _showMessage('التنبيهات تظهر تلقائياً عند وجودها'),
                       child: const Icon(Icons.notifications_none, size: 28),
+                    ),
+                    const SizedBox(width: 10),
+                    InkWell(
+                      onTap: () => _showMessage('لا توجد رسائل حالياً'),
+                      child: const Icon(Icons.chat_bubble_outline, size: 26),
                     ),
                     const Spacer(),
                     Column(
@@ -102,8 +112,12 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                           width: 90,
                           height: 64,
                           fit: BoxFit.contain,
-                          errorBuilder: (_, __, ___) =>
-                              const Icon(Icons.school, size: 40, color: mainColor),
+                          errorBuilder: (context, error, stackTrace) =>
+                              const Icon(
+                            Icons.school,
+                            size: 40,
+                            color: mainColor,
+                          ),
                         ),
                         Transform.translate(
                           offset: const Offset(0, -8),
@@ -151,8 +165,10 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                       .doc(schoolId)
                       .snapshots(),
                   builder: (context, sch) {
-                    final name = sch.data?.data()?['school_name']?.toString() ??
-                        'المدرسة';
+                    final name =
+                        sch.data?.data()?['school_name']?.toString() ??
+                            'المدرسة';
+
                     return Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 20),
                       child: Container(
@@ -186,6 +202,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                         !snap.hasData) {
                       return const Center(child: CircularProgressIndicator());
                     }
+
                     if (snap.hasError) {
                       return Center(
                         child: Padding(
@@ -197,7 +214,9 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                         ),
                       );
                     }
+
                     final docs = snap.data ?? [];
+
                     if (docs.isEmpty) {
                       return const Center(
                         child: Padding(
@@ -213,9 +232,11 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
 
                     final effId = _effectiveStudentDocId(docs);
                     final selected = _docById(docs, effId);
+
                     if (selected == null || !selected.exists) {
                       return const Center(child: CircularProgressIndicator());
                     }
+
                     final m = studentDocAsMap(selected);
 
                     return SingleChildScrollView(
@@ -246,7 +267,9 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                             )
                           else
                             const SizedBox.shrink(),
+
                           const SizedBox(height: 16),
+
                           Container(
                             padding: const EdgeInsets.all(16),
                             decoration: BoxDecoration(
@@ -254,6 +277,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                               border: Border.all(color: Colors.grey.shade300),
                             ),
                             child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.end,
                               children: [
                                 Align(
                                   alignment: Alignment.centerRight,
@@ -264,68 +288,65 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                                       width: 140,
                                       height: 68,
                                       fit: BoxFit.cover,
-                                      errorBuilder: (_, __, ___) =>
-                                          const Icon(Icons.person, size: 64),
+                                      errorBuilder:
+                                          (context, error, stackTrace) =>
+                                              const Icon(Icons.person, size: 64),
                                     ),
                                   ),
                                 ),
-                                const SizedBox(height: 20),
-                                Row(
-                                  mainAxisAlignment: MainAxisAlignment.end,
-                                  children: [
-                                    Column(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.end,
-                                      children: [
-                                        Text(m['name']?.toString() ?? '—'),
-                                        const SizedBox(height: 14),
-                                        Text(m['grade']?.toString() ?? '—'),
-                                        const SizedBox(height: 14),
-                                        Text(m['bus']?.toString() ?? '—'),
-                                        if ((m['student_id'] ??
-                                                m['display_id'] ??
-                                                '')
-                                            .toString()
-                                            .isNotEmpty) ...[
-                                          const SizedBox(height: 14),
-                                          Text(
-                                            m['student_id']?.toString() ??
-                                                m['display_id']?.toString() ??
-                                                '',
-                                            style: const TextStyle(
-                                              fontWeight: FontWeight.w600,
-                                              color: mainColor,
-                                            ),
-                                          ),
-                                        ],
-                                      ],
-                                    ),
-                                    const SizedBox(width: 16),
-                                    const Column(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.end,
-                                      children: [
-                                        LabelText(text: 'الاسم'),
-                                        SizedBox(height: 16),
-                                        LabelText(text: 'الصف'),
-                                        SizedBox(height: 16),
-                                        LabelText(text: 'رقم الباص'),
-                                        SizedBox(height: 16),
-                                        LabelText(text: 'معرف الطالب'),
-                                      ],
-                                    ),
-                                  ],
+
+                                const SizedBox(height: 22),
+
+                                _infoLine(
+                                  'الاسم',
+                                  m['name']?.toString() ?? '—',
                                 ),
+                                _infoLine(
+                                  'الصف',
+                                  m['grade']?.toString() ?? '—',
+                                ),
+                                _infoLine(
+                                  'رقم الباص',
+                                  m['bus']?.toString() ?? '—',
+                                ),
+                                if ((m['student_id'] ??
+                                        m['display_id'] ??
+                                        '')
+                                    .toString()
+                                    .isNotEmpty)
+                                  _infoLine(
+                                    'معرف الطالب',
+                                    m['student_id']?.toString() ??
+                                        m['display_id']?.toString() ??
+                                        '',
+                                    valueColor: mainColor,
+                                  ),
                               ],
                             ),
                           ),
+
                           const SizedBox(height: 24),
+
+                          Center(
+                            child: Text(
+                              'يرجى تحديد حالة حضور الطالب لهذا اليوم',
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                fontSize: 15,
+                                fontWeight: FontWeight.w600,
+                                color: Colors.grey.shade700,
+                              ),
+                            ),
+                          ),
+
+                          const SizedBox(height: 18),
+
                           Row(
+                            textDirection: TextDirection.ltr,
                             children: [
                               Expanded(
                                 child: InkWell(
-                                  onTap: () =>
-                                      _registerStatus('غائب', effId),
+                                  onTap: () => _registerStatus('غائب', effId),
                                   child: Container(
                                     height: 54,
                                     decoration: BoxDecoration(
@@ -349,8 +370,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                               const SizedBox(width: 12),
                               Expanded(
                                 child: InkWell(
-                                  onTap: () =>
-                                      _registerStatus('حاضر', effId),
+                                  onTap: () => _registerStatus('حاضر', effId),
                                   child: Container(
                                     height: 54,
                                     decoration: BoxDecoration(
@@ -373,6 +393,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                               ),
                             ],
                           ),
+
                           const SizedBox(height: 24),
                         ],
                       ),
@@ -383,6 +404,41 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
             ],
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _infoLine(String label, String value, {Color? valueColor}) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 16),
+      child: Row(
+        textDirection: TextDirection.rtl,
+        mainAxisAlignment: MainAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 95,
+            child: Text(
+              '$label:',
+              textAlign: TextAlign.right,
+              style: const TextStyle(
+                fontWeight: FontWeight.bold,
+                fontSize: 15,
+              ),
+            ),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Text(
+              value,
+              textAlign: TextAlign.right,
+              style: TextStyle(
+                fontSize: 15,
+                fontWeight: FontWeight.w500,
+                color: valueColor ?? Colors.black,
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
