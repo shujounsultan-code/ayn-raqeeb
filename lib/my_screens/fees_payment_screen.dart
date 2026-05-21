@@ -30,6 +30,191 @@ class _FeesPaymentScreenState extends State<FeesPaymentScreen> {
     );
   }
 
+  void _showMadaPaymentSheet() {
+    final cardController = TextEditingController();
+    final nameController = TextEditingController();
+    final dateController = TextEditingController();
+    final cvvController = TextEditingController();
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (context) {
+        return Directionality(
+          textDirection: TextDirection.rtl,
+          child: Padding(
+            padding: EdgeInsets.only(
+              right: 20,
+              left: 20,
+              top: 22,
+              bottom: MediaQuery.of(context).viewInsets.bottom + 20,
+            ),
+            child: SingleChildScrollView(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Center(
+                    child: Text(
+                      'الدفع عبر مدى',
+                      style: TextStyle(
+                        fontSize: 21,
+                        fontWeight: FontWeight.bold,
+                        color: mainColor,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                  TextField(
+                    controller: cardController,
+                    keyboardType: TextInputType.number,
+                    textAlign: TextAlign.right,
+                    decoration: const InputDecoration(
+                      labelText: 'رقم البطاقة',
+                      hintText: '0000 0000 0000 0000',
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: nameController,
+                    textAlign: TextAlign.right,
+                    decoration: const InputDecoration(
+                      labelText: 'اسم حامل البطاقة',
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: TextField(
+                          controller: cvvController,
+                          keyboardType: TextInputType.number,
+                          textAlign: TextAlign.right,
+                          decoration: const InputDecoration(
+                            labelText: 'CVV',
+                            hintText: '123',
+                            border: OutlineInputBorder(),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: TextField(
+                          controller: dateController,
+                          keyboardType: TextInputType.datetime,
+                          textAlign: TextAlign.right,
+                          decoration: const InputDecoration(
+                            labelText: 'تاريخ الانتهاء',
+                            hintText: 'MM/YY',
+                            border: OutlineInputBorder(),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 18),
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton(
+                      onPressed: () {
+                        Navigator.pop(context);
+                        _showMessage('تم إرسال بيانات الدفع');
+                      },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: mainColor,
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                      ),
+                      child: const Text(
+                        'تأكيد الدفع',
+                        style: TextStyle(color: Colors.white, fontSize: 18),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _madaLogo() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(7),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(width: 38, height: 10, color: const Color(0xFF26A7DF)),
+              const SizedBox(height: 4),
+              Container(width: 38, height: 10, color: const Color(0xFF8DC63F)),
+            ],
+          ),
+          const SizedBox(width: 8),
+          const Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                'مدى',
+                style: TextStyle(
+                  fontSize: 16,
+                  height: 0.9,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.black,
+                ),
+              ),
+              Text(
+                'mada',
+                style: TextStyle(
+                  fontSize: 16,
+                  height: 0.9,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.black,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _infoLine(String title, String value, {Color? valueColor}) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Row(
+        textDirection: TextDirection.rtl,
+        children: [
+          Text(
+            '$title: ',
+            textAlign: TextAlign.right,
+            style: const TextStyle(fontWeight: FontWeight.bold),
+          ),
+          Expanded(
+            child: Text(
+              value,
+              textAlign: TextAlign.right,
+              style: TextStyle(color: valueColor ?? Colors.black),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final schoolId = ParentSession.schoolIdFromParent ?? '';
@@ -46,10 +231,16 @@ class _FeesPaymentScreenState extends State<FeesPaymentScreen> {
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 20),
                 child: Row(
+                  textDirection: TextDirection.ltr,
                   children: [
                     InkWell(
                       onTap: () => _showMessage('التنبيهات'),
                       child: const Icon(Icons.notifications_none, size: 28),
+                    ),
+                    const SizedBox(width: 10),
+                    InkWell(
+                      onTap: () => _showMessage('لا توجد رسائل حالياً'),
+                      child: const Icon(Icons.chat_bubble_outline, size: 26),
                     ),
                     const Spacer(),
                     Column(
@@ -58,8 +249,12 @@ class _FeesPaymentScreenState extends State<FeesPaymentScreen> {
                           'assets/images/logobg.png',
                           width: 90,
                           height: 64,
-                          errorBuilder: (_, __, ___) =>
-                              const Icon(Icons.school, size: 40, color: mainColor),
+                          errorBuilder: (context, error, stackTrace) =>
+                              const Icon(
+                            Icons.school,
+                            size: 40,
+                            color: mainColor,
+                          ),
                         ),
                         const SizedBox(height: 2),
                         const Text(
@@ -81,6 +276,7 @@ class _FeesPaymentScreenState extends State<FeesPaymentScreen> {
                   alignment: Alignment.centerRight,
                   child: Text(
                     ParentSession.parentName ?? 'ولي الأمر',
+                    textAlign: TextAlign.right,
                     style: const TextStyle(
                       fontWeight: FontWeight.bold,
                       fontSize: 15,
@@ -96,12 +292,13 @@ class _FeesPaymentScreenState extends State<FeesPaymentScreen> {
                         !stSnap.hasData) {
                       return const Center(child: CircularProgressIndicator());
                     }
+
                     if (stSnap.hasError) {
-                      return Center(
-                        child: Text('خطأ: ${stSnap.error}'),
-                      );
+                      return Center(child: Text('خطأ: ${stSnap.error}'));
                     }
+
                     final docs = stSnap.data ?? [];
+
                     if (docs.isEmpty) {
                       return const Center(
                         child: Padding(
@@ -140,7 +337,10 @@ class _FeesPaymentScreenState extends State<FeesPaymentScreen> {
                                     d.data()?['name']?.toString() ?? d.id;
                                 return DropdownMenuItem(
                                   value: d.id,
-                                  child: Text(n),
+                                  child: Align(
+                                    alignment: Alignment.centerRight,
+                                    child: Text(n, textAlign: TextAlign.right),
+                                  ),
                                 );
                               }).toList(),
                               onChanged: (v) {
@@ -170,6 +370,7 @@ class _FeesPaymentScreenState extends State<FeesPaymentScreen> {
                                     : feeAmount.toString();
 
                                 return Container(
+                                  width: double.infinity,
                                   padding: const EdgeInsets.all(18),
                                   decoration: BoxDecoration(
                                     color: Colors.white,
@@ -183,38 +384,55 @@ class _FeesPaymentScreenState extends State<FeesPaymentScreen> {
                                       ),
                                     ],
                                   ),
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.end,
-                                    children: [
-                                      Text(
-                                        schoolName,
-                                        style: const TextStyle(
-                                          fontSize: 16,
-                                          fontWeight: FontWeight.bold,
-                                          color: mainColor,
+                                  child: Directionality(
+                                    textDirection: TextDirection.rtl,
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.stretch,
+                                      children: [
+                                        Align(
+                                          alignment: Alignment.centerRight,
+                                          child: Text(
+                                            schoolName,
+                                            textAlign: TextAlign.right,
+                                            style: const TextStyle(
+                                              fontSize: 16,
+                                              fontWeight: FontWeight.bold,
+                                              color: mainColor,
+                                            ),
+                                          ),
                                         ),
-                                      ),
-                                      const SizedBox(height: 8),
-                                      const Text(
-                                        'الرسوم',
-                                        style: TextStyle(
-                                          fontSize: 18,
-                                          fontWeight: FontWeight.bold,
+                                        const SizedBox(height: 8),
+                                        const Align(
+                                          alignment: Alignment.centerRight,
+                                          child: Text(
+                                            'الرسوم',
+                                            textAlign: TextAlign.right,
+                                            style: TextStyle(
+                                              fontSize: 18,
+                                              fontWeight: FontWeight.bold,
+                                            ),
+                                          ),
                                         ),
-                                      ),
-                                      const SizedBox(height: 6),
-                                      Text(
-                                        feeLabel,
-                                        style: const TextStyle(fontSize: 15),
-                                      ),
-                                    ],
+                                        const SizedBox(height: 6),
+                                        Align(
+                                          alignment: Alignment.centerRight,
+                                          child: Text(
+                                            feeLabel,
+                                            textAlign: TextAlign.right,
+                                            style:
+                                                const TextStyle(fontSize: 15),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
                                   ),
                                 );
                               },
                             )
                           else
                             Container(
+                              width: double.infinity,
                               padding: const EdgeInsets.all(18),
                               decoration: BoxDecoration(
                                 color: Colors.white,
@@ -222,22 +440,34 @@ class _FeesPaymentScreenState extends State<FeesPaymentScreen> {
                                 border:
                                     Border.all(color: Colors.grey.shade300),
                               ),
-                              child: const Column(
-                                crossAxisAlignment: CrossAxisAlignment.end,
-                                children: [
-                                  Text(
-                                    'الرسوم',
-                                    style: TextStyle(
-                                      fontSize: 18,
-                                      fontWeight: FontWeight.bold,
+                              child: const Directionality(
+                                textDirection: TextDirection.rtl,
+                                child: Column(
+                                  crossAxisAlignment:
+                                      CrossAxisAlignment.stretch,
+                                  children: [
+                                    Align(
+                                      alignment: Alignment.centerRight,
+                                      child: Text(
+                                        'الرسوم',
+                                        textAlign: TextAlign.right,
+                                        style: TextStyle(
+                                          fontSize: 18,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
                                     ),
-                                  ),
-                                  SizedBox(height: 6),
-                                  Text(
-                                    '٢٠٠ ريال للفصل الواحد',
-                                    style: TextStyle(fontSize: 15),
-                                  ),
-                                ],
+                                    SizedBox(height: 6),
+                                    Align(
+                                      alignment: Alignment.centerRight,
+                                      child: Text(
+                                        '٢٠٠ ريال للفصل الواحد',
+                                        textAlign: TextAlign.right,
+                                        style: TextStyle(fontSize: 15),
+                                      ),
+                                    ),
+                                  ],
+                                ),
                               ),
                             ),
                           const SizedBox(height: 16),
@@ -252,53 +482,71 @@ class _FeesPaymentScreenState extends State<FeesPaymentScreen> {
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.end,
                               children: [
-                                Text('الطالب: $name'),
-                                Text('الصف: $grade'),
+                                _infoLine('الطالب', name),
+                                _infoLine('الصف', grade),
                                 const Divider(height: 20),
-                                Text(
-                                  feesPaid
-                                      ? 'حالة الدفع: تم الدفع'
-                                      : 'حالة الدفع: لم يتم الدفع',
-                                  style: TextStyle(
-                                    fontWeight: FontWeight.bold,
-                                    color: feesPaid
-                                        ? Colors.green.shade700
-                                        : Colors.orange.shade800,
-                                  ),
+                                _infoLine(
+                                  'حالة الدفع',
+                                  feesPaid ? 'تم الدفع' : 'لم يتم الدفع',
+                                  valueColor: feesPaid
+                                      ? Colors.green.shade700
+                                      : Colors.orange.shade800,
                                 ),
                                 if (feesPaid)
-                                  Text('تاريخ الدفع: $paymentDate'),
+                                  _infoLine('تاريخ الدفع', paymentDate),
                               ],
                             ),
                           ),
                           const SizedBox(height: 24),
-                          InkWell(
-                            onTap: () =>
-                                _showMessage('الدفع الإلكتروني قيد التطوير'),
-                            borderRadius: BorderRadius.circular(10),
-                            child: Container(
-                              height: 52,
-                              decoration: BoxDecoration(
-                                borderRadius: BorderRadius.circular(10),
-                                border: Border.all(color: Colors.grey),
-                              ),
-                              child: const Center(
-                                child: Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Icon(Icons.apple, size: 26),
-                                    SizedBox(width: 6),
-                                    Text(
-                                      'Pay',
-                                      style: TextStyle(
-                                        fontSize: 20,
-                                        fontWeight: FontWeight.w600,
+                          Row(
+                            textDirection: TextDirection.rtl,
+                            children: [
+                              Expanded(
+                                child: InkWell(
+                                  onTap: () =>
+                                      _showMessage('الدفع الإلكتروني قيد التطوير'),
+                                  borderRadius: BorderRadius.circular(10),
+                                  child: Container(
+                                    height: 52,
+                                    decoration: BoxDecoration(
+                                      borderRadius: BorderRadius.circular(10),
+                                      border: Border.all(color: Colors.grey),
+                                    ),
+                                    child: const Center(
+                                      child: Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          Text(
+                                            'Pay',
+                                            style: TextStyle(
+                                              fontSize: 20,
+                                              fontWeight: FontWeight.w600,
+                                            ),
+                                          ),
+                                          SizedBox(width: 6),
+                                          Icon(Icons.apple, size: 26),
+                                        ],
                                       ),
                                     ),
-                                  ],
+                                  ),
                                 ),
                               ),
-                            ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: InkWell(
+                                  onTap: _showMadaPaymentSheet,
+                                  borderRadius: BorderRadius.circular(10),
+                                  child: Container(
+                                    height: 52,
+                                    decoration: BoxDecoration(
+                                      borderRadius: BorderRadius.circular(10),
+                                      border: Border.all(color: Colors.grey),
+                                    ),
+                                    child: Center(child: _madaLogo()),
+                                  ),
+                                ),
+                              ),
+                            ],
                           ),
                           const SizedBox(height: 12),
                           InkWell(
@@ -322,6 +570,7 @@ class _FeesPaymentScreenState extends State<FeesPaymentScreen> {
                               ),
                             ),
                           ),
+                          const SizedBox(height: 24),
                         ],
                       ),
                     );

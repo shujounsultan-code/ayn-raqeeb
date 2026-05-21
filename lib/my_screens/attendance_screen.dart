@@ -18,11 +18,14 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
 
   Future<void> _registerStatus(String newStatus, String studentDocId) async {
     final pid = ParentSession.parentBusinessId;
+
     if (studentDocId.isEmpty) {
       _showMessage('اختر الطالب أولاً');
       return;
     }
+
     setState(() => _status = newStatus);
+
     try {
       await FirebaseFirestore.instance.collection('parent_attendance').add({
         'parent_id': pid,
@@ -30,7 +33,9 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
         'status': newStatus,
         'created_at': FieldValue.serverTimestamp(),
       });
+
       if (!mounted) return;
+
       _showMessage(
         newStatus == 'حاضر'
             ? 'تم تسجيل حضور الطالب'
@@ -45,7 +50,10 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
   void _showMessage(String text) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text(text, textAlign: TextAlign.right),
+        content: Text(
+          text,
+          textAlign: TextAlign.right,
+        ),
         duration: const Duration(seconds: 2),
         behavior: SnackBarBehavior.floating,
       ),
@@ -56,8 +64,13 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
     List<DocumentSnapshot<Map<String, dynamic>>> docs,
   ) {
     if (docs.isEmpty) return '';
+
     final sel = _selectedStudentDocId;
-    if (sel != null && docs.any((d) => d.id == sel)) return sel;
+
+    if (sel != null && docs.any((d) => d.id == sel)) {
+      return sel;
+    }
+
     return docs.first.id;
   }
 
@@ -68,6 +81,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
     for (final d in docs) {
       if (d.id == id) return d;
     }
+
     return docs.isEmpty ? null : docs.first;
   }
 
@@ -79,21 +93,24 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
       textDirection: TextDirection.rtl,
       child: Scaffold(
         backgroundColor: Colors.white,
+
         body: SafeArea(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
+
               const SizedBox(height: 12),
+
+              // الهيدر
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 20),
                 child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  textDirection: TextDirection.rtl,
                   children: [
-                    InkWell(
-                      onTap: () =>
-                          _showMessage('التنبيهات تظهر تلقائياً عند وجودها'),
-                      child: const Icon(Icons.notifications_none, size: 28),
-                    ),
-                    const Spacer(),
+
+                    // اللوقو
                     Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
@@ -102,9 +119,14 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                           width: 90,
                           height: 64,
                           fit: BoxFit.contain,
-                          errorBuilder: (_, __, ___) =>
-                              const Icon(Icons.school, size: 40, color: mainColor),
+                          errorBuilder: (context, error, stackTrace) =>
+                              const Icon(
+                            Icons.school,
+                            size: 40,
+                            color: mainColor,
+                          ),
                         ),
+
                         Transform.translate(
                           offset: const Offset(0, -8),
                           child: const Text(
@@ -118,24 +140,59 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                         ),
                       ],
                     ),
+
+                    // التنبيهات والرسائل
+                    Row(
+                      children: [
+
+                        InkWell(
+                          onTap: () => _showMessage(
+                            'التنبيهات تظهر تلقائياً عند وجودها',
+                          ),
+                          child: const Icon(
+                            Icons.notifications_none,
+                            size: 25,
+                            color: Colors.black,
+                          ),
+                        ),
+
+                        const SizedBox(width: 12),
+
+                        InkWell(
+                          onTap: () =>
+                              _showMessage('لا توجد رسائل حالياً'),
+                          child: const Icon(
+                            Icons.chat_bubble_outline,
+                            size: 23,
+                            color: Colors.black,
+                          ),
+                        ),
+                      ],
+                    ),
                   ],
                 ),
               ),
+
+              // بيانات ولي الأمر
               Padding(
                 padding: const EdgeInsets.fromLTRB(20, 4, 20, 8),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
+
                     Text(
-                      ParentSession.parentName ?? 'ولي الأمر',
+                      ParentSession.parentName ?? 'سحر محمد',
+                      textAlign: TextAlign.right,
                       style: const TextStyle(
                         fontSize: 16,
                         fontWeight: FontWeight.bold,
                       ),
                     ),
+
                     if ((ParentSession.parentPhone ?? '').isNotEmpty)
                       Text(
                         'جوال: ${ParentSession.parentPhone}',
+                        textAlign: TextAlign.right,
                         style: TextStyle(
                           fontSize: 13,
                           color: Colors.grey.shade700,
@@ -144,6 +201,8 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                   ],
                 ),
               ),
+
+              // المدرسة
               if (schoolId.isNotEmpty)
                 StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
                   stream: FirebaseFirestore.instance
@@ -151,8 +210,11 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                       .doc(schoolId)
                       .snapshots(),
                   builder: (context, sch) {
-                    final name = sch.data?.data()?['school_name']?.toString() ??
-                        'المدرسة';
+
+                    final name =
+                        sch.data?.data()?['school_name']?.toString() ??
+                            'المدرسة';
+
                     return Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 20),
                       child: Container(
@@ -177,15 +239,24 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                     );
                   },
                 ),
+
               const SizedBox(height: 16),
+
               Expanded(
-                child: StreamBuilder<List<DocumentSnapshot<Map<String, dynamic>>>>(
+                child: StreamBuilder<
+                    List<DocumentSnapshot<Map<String, dynamic>>>>(
                   stream: parentLinkedStudentsStream(),
+
                   builder: (context, snap) {
-                    if (snap.connectionState == ConnectionState.waiting &&
+
+                    if (snap.connectionState ==
+                            ConnectionState.waiting &&
                         !snap.hasData) {
-                      return const Center(child: CircularProgressIndicator());
+                      return const Center(
+                        child: CircularProgressIndicator(),
+                      );
                     }
+
                     if (snap.hasError) {
                       return Center(
                         child: Padding(
@@ -197,13 +268,15 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                         ),
                       );
                     }
+
                     final docs = snap.data ?? [];
+
                     if (docs.isEmpty) {
                       return const Center(
                         child: Padding(
                           padding: EdgeInsets.all(24),
                           child: Text(
-                            'لا يوجد طالب مرتبط بحسابك في النظام. راجع المدرسة لربط الطالب أو تحديث حقل parent_id.',
+                            'لا يوجد طالب مرتبط بحسابك',
                             textAlign: TextAlign.center,
                             style: TextStyle(fontSize: 15),
                           ),
@@ -211,154 +284,191 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                       );
                     }
 
-                    final effId = _effectiveStudentDocId(docs);
-                    final selected = _docById(docs, effId);
+                    final effId =
+                        _effectiveStudentDocId(docs);
+
+                    final selected =
+                        _docById(docs, effId);
+
                     if (selected == null || !selected.exists) {
-                      return const Center(child: CircularProgressIndicator());
+                      return const Center(
+                        child: CircularProgressIndicator(),
+                      );
                     }
+
                     final m = studentDocAsMap(selected);
 
                     return SingleChildScrollView(
-                      padding: const EdgeInsets.symmetric(horizontal: 20),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 20,
+                      ),
+
                       child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        crossAxisAlignment:
+                            CrossAxisAlignment.stretch,
+
                         children: [
+
+                          // اختيار الطالب
                           if (docs.length > 1)
                             DropdownButtonFormField<String>(
                               value: effId,
+
                               decoration: const InputDecoration(
                                 labelText: 'الطالب',
                                 border: OutlineInputBorder(),
                               ),
+
                               items: docs.map((d) {
+
                                 final n =
-                                    d.data()?['name']?.toString() ?? d.id;
+                                    d.data()?['name']
+                                            ?.toString() ??
+                                        d.id;
+
                                 return DropdownMenuItem(
                                   value: d.id,
-                                  child: Text(n, textAlign: TextAlign.right),
+
+                                  child: Align(
+                                    alignment:
+                                        Alignment.centerRight,
+
+                                    child: Text(
+                                      n,
+                                      textAlign:
+                                          TextAlign.right,
+                                    ),
+                                  ),
                                 );
                               }).toList(),
+
                               onChanged: (v) {
                                 if (v != null) {
-                                  setState(() => _selectedStudentDocId = v);
+                                  setState(() {
+                                    _selectedStudentDocId =
+                                        v;
+                                  });
                                 }
                               },
                             )
                           else
                             const SizedBox.shrink(),
+
                           const SizedBox(height: 16),
+
+                          // الكرت
                           Container(
                             padding: const EdgeInsets.all(16),
+
                             decoration: BoxDecoration(
-                              borderRadius: BorderRadius.circular(13),
-                              border: Border.all(color: Colors.grey.shade300),
+                              borderRadius:
+                                  BorderRadius.circular(13),
+
+                              border: Border.all(
+                                color: Colors.grey.shade300,
+                              ),
                             ),
+
                             child: Column(
+                              crossAxisAlignment:
+                                  CrossAxisAlignment.end,
+
                               children: [
+
                                 Align(
-                                  alignment: Alignment.centerRight,
+                                  alignment:
+                                      Alignment.centerRight,
+
                                   child: ClipRRect(
-                                    borderRadius: BorderRadius.circular(9),
+                                    borderRadius:
+                                        BorderRadius.circular(9),
+
                                     child: Image.asset(
                                       'assets/images/student.png',
                                       width: 140,
                                       height: 68,
                                       fit: BoxFit.cover,
-                                      errorBuilder: (_, __, ___) =>
-                                          const Icon(Icons.person, size: 64),
-                                    ),
-                                  ),
-                                ),
-                                const SizedBox(height: 20),
-                                Row(
-                                  mainAxisAlignment: MainAxisAlignment.end,
-                                  children: [
-                                    Column(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.end,
-                                      children: [
-                                        Text(m['name']?.toString() ?? '—'),
-                                        const SizedBox(height: 14),
-                                        Text(m['grade']?.toString() ?? '—'),
-                                        const SizedBox(height: 14),
-                                        Text(m['bus']?.toString() ?? '—'),
-                                        if ((m['student_id'] ??
-                                                m['display_id'] ??
-                                                '')
-                                            .toString()
-                                            .isNotEmpty) ...[
-                                          const SizedBox(height: 14),
-                                          Text(
-                                            m['student_id']?.toString() ??
-                                                m['display_id']?.toString() ??
-                                                '',
-                                            style: const TextStyle(
-                                              fontWeight: FontWeight.w600,
-                                              color: mainColor,
-                                            ),
-                                          ),
-                                        ],
-                                      ],
-                                    ),
-                                    const SizedBox(width: 16),
-                                    const Column(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.end,
-                                      children: [
-                                        LabelText(text: 'الاسم'),
-                                        SizedBox(height: 16),
-                                        LabelText(text: 'الصف'),
-                                        SizedBox(height: 16),
-                                        LabelText(text: 'رقم الباص'),
-                                        SizedBox(height: 16),
-                                        LabelText(text: 'معرف الطالب'),
-                                      ],
-                                    ),
-                                  ],
-                                ),
-                              ],
-                            ),
-                          ),
-                          const SizedBox(height: 24),
-                          Row(
-                            children: [
-                              Expanded(
-                                child: InkWell(
-                                  onTap: () =>
-                                      _registerStatus('غائب', effId),
-                                  child: Container(
-                                    height: 54,
-                                    decoration: BoxDecoration(
-                                      color: _status == 'غائب'
-                                          ? Colors.red.shade700
-                                          : Colors.red,
-                                      borderRadius: BorderRadius.circular(8),
-                                    ),
-                                    child: const Center(
-                                      child: Text(
-                                        'غائب',
-                                        style: TextStyle(
-                                          color: Colors.white,
-                                          fontSize: 20,
-                                        ),
+
+                                      errorBuilder:
+                                          (
+                                        context,
+                                        error,
+                                        stackTrace,
+                                      ) =>
+                                              const Icon(
+                                        Icons.person,
+                                        size: 64,
                                       ),
                                     ),
                                   ),
                                 ),
+
+                                const SizedBox(height: 22),
+
+                                _infoLine(
+                                  'الاسم',
+                                  m['name']?.toString() ?? '—',
+                                ),
+
+                                _infoLine(
+                                  'الصف',
+                                  m['grade']?.toString() ?? '—',
+                                ),
+
+                                _infoLine(
+                                  'رقم الباص',
+                                  m['bus']?.toString() ?? '—',
+                                ),
+                              ],
+                            ),
+                          ),
+
+                          const SizedBox(height: 24),
+
+                          Center(
+                            child: Text(
+                              'يرجى تحديد حالة حضور الطالب لهذا اليوم',
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                fontSize: 15,
+                                fontWeight: FontWeight.w600,
+                                color: Colors.grey.shade700,
                               ),
-                              const SizedBox(width: 12),
+                            ),
+                          ),
+
+                          const SizedBox(height: 18),
+
+                          // حاضر وغائب
+                          Row(
+                            textDirection: TextDirection.rtl,
+                            children: [
+
                               Expanded(
                                 child: InkWell(
                                   onTap: () =>
-                                      _registerStatus('حاضر', effId),
+                                      _registerStatus(
+                                    'حاضر',
+                                    effId,
+                                  ),
+
                                   child: Container(
                                     height: 54,
+
                                     decoration: BoxDecoration(
-                                      color: _status == 'حاضر'
-                                          ? Colors.green.shade700
-                                          : Colors.green,
-                                      borderRadius: BorderRadius.circular(8),
+                                      color:
+                                          _status == 'حاضر'
+                                              ? Colors
+                                                  .green
+                                                  .shade700
+                                              : Colors.green,
+
+                                      borderRadius:
+                                          BorderRadius.circular(
+                                        8,
+                                      ),
                                     ),
+
                                     child: const Center(
                                       child: Text(
                                         'حاضر',
@@ -371,8 +481,49 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                                   ),
                                 ),
                               ),
+
+                              const SizedBox(width: 12),
+
+                              Expanded(
+                                child: InkWell(
+                                  onTap: () =>
+                                      _registerStatus(
+                                    'غائب',
+                                    effId,
+                                  ),
+
+                                  child: Container(
+                                    height: 54,
+
+                                    decoration: BoxDecoration(
+                                      color:
+                                          _status == 'غائب'
+                                              ? Colors
+                                                  .red
+                                                  .shade700
+                                              : Colors.red,
+
+                                      borderRadius:
+                                          BorderRadius.circular(
+                                        8,
+                                      ),
+                                    ),
+
+                                    child: const Center(
+                                      child: Text(
+                                        'غائب',
+                                        style: TextStyle(
+                                          color: Colors.white,
+                                          fontSize: 20,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ),
                             ],
                           ),
+
                           const SizedBox(height: 24),
                         ],
                       ),
@@ -386,25 +537,49 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
       ),
     );
   }
-}
 
-class LabelText extends StatelessWidget {
-  final String text;
+  Widget _infoLine(
+    String label,
+    String value, {
+    Color? valueColor,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 16),
 
-  const LabelText({super.key, required this.text});
+      child: Row(
+        textDirection: TextDirection.rtl,
+        children: [
 
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      textDirection: TextDirection.rtl,
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Text(
-          text,
-          style: const TextStyle(fontWeight: FontWeight.bold),
-        ),
-        const Text(':'),
-      ],
+          SizedBox(
+            width: 95,
+
+            child: Text(
+              '$label:',
+              textAlign: TextAlign.right,
+
+              style: const TextStyle(
+                fontWeight: FontWeight.bold,
+                fontSize: 15,
+              ),
+            ),
+          ),
+
+          const SizedBox(width: 14),
+
+          Expanded(
+            child: Text(
+              value,
+              textAlign: TextAlign.right,
+
+              style: TextStyle(
+                fontSize: 15,
+                fontWeight: FontWeight.w500,
+                color: valueColor ?? Colors.black,
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
