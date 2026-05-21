@@ -35,8 +35,7 @@ class _BusTrackingScreenState extends State<BusTrackingScreen> {
     return FirebaseFirestore.instance
         .collection('board_events')
         .where('student_doc_id', isEqualTo: studentDocId)
-        .orderBy('created_at_ms', descending: true)
-        .limit(1)
+        .limit(20)
         .snapshots();
   }
 
@@ -49,8 +48,7 @@ class _BusTrackingScreenState extends State<BusTrackingScreen> {
     return FirebaseFirestore.instance
         .collection('board_events')
         .where('parent_id', isEqualTo: parentId)
-        .orderBy('created_at_ms', descending: true)
-        .limit(1)
+        .limit(20)
         .snapshots();
   }
 
@@ -263,11 +261,25 @@ class _BusTrackingScreenState extends State<BusTrackingScreen> {
                         child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
                           stream: _studentBoardEventStream(st.id),
                           builder: (context, eventSnap) {
-                            final boardEvent = eventSnap.hasData &&
-                                    eventSnap.data!.docs.isNotEmpty
-                                ? eventSnap.data!.docs.first
-                                : null;
-                            final boardEventCount = eventSnap.data?.docs.length ?? 0;
+                            final boardDocs = eventSnap.hasData
+                                ? List<DocumentSnapshot<Map<String, dynamic>>>.from(
+                                    eventSnap.data!.docs)
+                                : <DocumentSnapshot<Map<String, dynamic>>>[];
+                            boardDocs.sort((a, b) {
+                              final aData = a.data();
+                              final bData = b.data();
+                              final aMillis = aData?['created_at_ms'];
+                              final bMillis = bData?['created_at_ms'];
+                              final aTime = aMillis is num
+                                  ? aMillis.toInt()
+                                  : 0;
+                              final bTime = bMillis is num
+                                  ? bMillis.toInt()
+                                  : 0;
+                              return bTime.compareTo(aTime);
+                            });
+                            final boardEvent = boardDocs.isNotEmpty ? boardDocs.first : null;
+                            final boardEventCount = boardDocs.length;
                             final boardingActive = _isBoardingActive(boardEvent);
                             final eventLabel = _boardEventLabel(boardEvent);
                             final boardData = boardEvent?.data();
@@ -384,6 +396,29 @@ class _BusTrackingScreenState extends State<BusTrackingScreen> {
                                     ),
                                   ),
                                 ),
+                                if (!boardingActive && ParentSession.parentBusinessId != null)
+                                  Padding(
+                                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                                    child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+                                      stream: _parentBoardEventStream(),
+                                      builder: (context, parentSnap) {
+                                        if (parentSnap.connectionState == ConnectionState.waiting) {
+                                          return const SizedBox.shrink();
+                                        }
+                                        final parentEventCount = parentSnap.data?.docs.length ?? 0;
+                                        return Text(
+                                          parentEventCount > 0
+                                              ? 'يوجد سجّل board_events واحد أو أكثر مرتبطًا برقم ولي الأمر (${ParentSession.parentBusinessId}). هذا يعني أن الحدث ربما لا يرتبط مباشرةً بمعرّف الطالب الحالي.'
+                                              : 'لا يوجد سجلات board_events مرتبطة برقم ولي الأمر (${ParentSession.parentBusinessId}) أيضًا.',
+                                          style: TextStyle(
+                                            fontSize: 11,
+                                            color: const Color(0xFF7A4B00),
+                                          ),
+                                          textAlign: TextAlign.right,
+                                        );
+                                      },
+                                    ),
+                                  ),
                                 const SizedBox(height: 10),
                                 Expanded(
                                   child: StreamBuilder<
@@ -398,10 +433,11 @@ class _BusTrackingScreenState extends State<BusTrackingScreen> {
                                       LatLng? busPoint;
                                       double? accuracy;
                                       List<LatLng> trailPoints = [];
-
-                                      if (locSnap.hasData &&
+                                      final hasLocationDoc = locSnap.hasData &&
                                           locSnap.data!.exists &&
-                                          locSnap.data!.data() != null) {
+                                          locSnap.data!.data() != null;
+
+                                      if (hasLocationDoc) {
                                         final ld = locSnap.data!.data()!;
                                         if (ld['lat'] is num && ld['lng'] is num) {
                                           busPoint = LatLng(
@@ -431,37 +467,66 @@ class _BusTrackingScreenState extends State<BusTrackingScreen> {
                                           Padding(
                                             padding: const EdgeInsets.symmetric(
                                                 horizontal: 16),
-                                            child: schoolId.isNotEmpty
-                                                ? StreamBuilder<
-                                                    DocumentSnapshot<
-                                                        Map<String, dynamic>>>(
-                                                    stream: FirebaseFirestore.instance
-                                                        .collection('schools')
-                                                        .doc(schoolId)
-                                                        .snapshots(),
-                                                    builder: (context, sch) {
-                                                      final sname = sch.data
-                                                              ?.data()?['school_name']
-                                                              ?.toString() ??
-                                                          '';
-                                                      return _infoCard(
+                                            child: Column(
+                                              crossAxisAlignment:
+                                                  CrossAxisAlignment.stretch,
+                                              children: [
+                                                if (effectiveBusLocDocId.isNotEmpty)
+                                                  Container(
+                                                    width: double.infinity,
+                                                    padding: const EdgeInsets.all(10),
+                                                    decoration: BoxDecoration(
+                                                      color: const Color(0xFFEDF7F7),
+                                                      borderRadius:
+                                                          BorderRadius.circular(12),
+                                                      border: Border.all(
+                                                        color:
+                                                            const Color(0xFFB8E0E0),
+                                                      ),
+                                                    ),
+                                                    child: Text(
+                                                      'معرف موقع الحافلة: $effectiveBusLocDocId\nوضع المستند: ${hasLocationDoc ? 'موجود' : 'غير موجود'}',
+                                                      style: const TextStyle(
+                                                        fontSize: 12,
+                                                        color: Color(0xFF235353),
+                                                      ),
+                                                      textAlign: TextAlign.right,
+                                                    ),
+                                                  ),
+                                                const SizedBox(height: 10),
+                                                schoolId.isNotEmpty
+                                                    ? StreamBuilder<
+                                                        DocumentSnapshot<
+                                                            Map<String, dynamic>>>(
+                                                        stream: FirebaseFirestore.instance
+                                                            .collection('schools')
+                                                            .doc(schoolId)
+                                                            .snapshots(),
+                                                        builder: (context, sch) {
+                                                          final sname = sch.data
+                                                                  ?.data()?['school_name']
+                                                                  ?.toString() ??
+                                                              '';
+                                                          return _infoCard(
+                                                            name: name,
+                                                            bus: bus,
+                                                            busLocDocId: busLocDocId,
+                                                            busPoint: busPoint,
+                                                            schoolLine: sname.isNotEmpty
+                                                                ? 'المدرسة: $sname'
+                                                                : null,
+                                                          );
+                                                        },
+                                                      )
+                                                    : _infoCard(
                                                         name: name,
                                                         bus: bus,
                                                         busLocDocId: busLocDocId,
                                                         busPoint: busPoint,
-                                                        schoolLine: sname.isNotEmpty
-                                                            ? 'المدرسة: $sname'
-                                                            : null,
-                                                      );
-                                                    },
-                                                  )
-                                                : _infoCard(
-                                                    name: name,
-                                                    bus: bus,
-                                                    busLocDocId: busLocDocId,
-                                                    busPoint: busPoint,
-                                                    schoolLine: null,
-                                                  ),
+                                                        schoolLine: null,
+                                                      ),
+                                              ],
+                                            ),
                                           ),
                                           const SizedBox(height: 10),
                                           Expanded(

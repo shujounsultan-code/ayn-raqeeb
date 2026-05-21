@@ -64,107 +64,108 @@ class _DashboardPageState extends State<DashboardPage> {
   }
 
   Future<void> _initLocationStream() async {
-    // Skip location features on web (geolocator not supported)
-    if (kIsWeb) {
-      debugPrint('geolocator غير مدعوم على web');
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('يرجى تشغيل التطبيق على Android/iOS لاستخدام الموقع')),
-      );
-      return;
-    }
-
-    // Skip location features on Windows desktop (geolocator not supported)
-    if (isWindows) {
-      debugPrint('geolocator غير مدعوم على Windows desktop');
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('يرجى تشغيل التطبيق على Android/iOS لاستخدام الموقع')),
-      );
-      return;
-    }
-
     debugPrint('=== بدء _initLocationStream ===');
+    debugPrint('المنصة الحالية: ${kIsWeb ? "Web" : isWindows ? "Windows" : "Mobile"}');
     
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(content: Text('جاري تهيئة خدمة الموقع...')),
     );
     
-    // فحص خدمة الموقع
-    bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
-    debugPrint('خدمة الموقع مفعلة: $serviceEnabled');
-    
-    if (!serviceEnabled) {
-      debugPrint('خدمة الموقع غير مفعلة');
-      _showLocationServiceDialog();
-      return;
-    }
-    
-    // فحص وطلب الإذن بشكل مباشر
-    LocationPermission permission = await Geolocator.checkPermission();
-    debugPrint('إذن الموقع الحالي: $permission');
-    
-    // طلب الإذن دائماً إذا لم يكن ممنوحاً
-    if (permission == LocationPermission.denied || permission == LocationPermission.deniedForever) {
-      debugPrint('طلب إذن الموقع...');
-      permission = await Geolocator.requestPermission();
-      debugPrint('إذن الموقع بعد الطلب: $permission');
-    }
-    
-    if (permission == LocationPermission.deniedForever) {
-      debugPrint('تم رفض الإذن نهائياً');
-      _showPermissionForeverDeniedDialog();
-      return;
-    }
-    
-    if (permission == LocationPermission.denied) {
-      debugPrint('تم رفض الإذن');
-      _showPermissionDeniedDialog();
-      return;
-    }
-    
-    debugPrint('تم منح إذن الموقع، جاري تحديد الموقع...');
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('تم منح إذن الموقع، جاري تحديد الموقع...')),
-    );
-    
-    // الحصول على الموقع الحالي
     try {
-      debugPrint('جاري الحصول على الموقع الحالي...');
-      final currentPosition = await Geolocator.getCurrentPosition(
-        desiredAccuracy: LocationAccuracy.high,
-      );
-      debugPrint('تم الحصول على الموقع: ${currentPosition.latitude}, ${currentPosition.longitude}');
+      // فحص خدمة الموقع (متاح فقط على الموبايل)
+      bool serviceEnabled = true;
+      if (!kIsWeb && !isWindows) {
+        serviceEnabled = await Geolocator.isLocationServiceEnabled();
+        debugPrint('خدمة الموقع مفعلة: $serviceEnabled');
+      }
       
-      setState(() {
-        busLocation = LatLng(currentPosition.latitude, currentPosition.longitude);
-        schoolLocation = LatLng(currentPosition.latitude, currentPosition.longitude);
-        debugPrint('تم تعيين busLocation: $busLocation');
-      });
+      if (!serviceEnabled) {
+        debugPrint('خدمة الموقع غير مفعلة');
+        _showLocationServiceDialog();
+        return;
+      }
       
+      // فحص وطلب الإذن (متاح فقط على الموبايل)
+      LocationPermission permission = LocationPermission.always;
+      if (!kIsWeb && !isWindows) {
+        permission = await Geolocator.checkPermission();
+        debugPrint('إذن الموقع الحالي: $permission');
+        
+        // طلب الإذن دائماً إذا لم يكن ممنوحاً
+        if (permission == LocationPermission.denied || permission == LocationPermission.deniedForever) {
+          debugPrint('طلب إذن الموقع...');
+          permission = await Geolocator.requestPermission();
+          debugPrint('إذن الموقع بعد الطلب: $permission');
+        }
+        
+        if (permission == LocationPermission.deniedForever) {
+          debugPrint('تم رفض الإذن نهائياً');
+          _showPermissionForeverDeniedDialog();
+          return;
+        }
+        
+        if (permission == LocationPermission.denied) {
+          debugPrint('تم رفض الإذن');
+          _showPermissionDeniedDialog();
+          return;
+        }
+      }
+      
+      debugPrint('تم منح إذن الموقع، جاري تحديد الموقع...');
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('تم تحديد موقع الحافلة: ${currentPosition.latitude.toStringAsFixed(4)}, ${currentPosition.longitude.toStringAsFixed(4)}')),
+        const SnackBar(content: Text('جاري تحديد الموقع...')),
       );
       
-      // بدء تتبع الموقع
-      _positionStream = Geolocator.getPositionStream(
-        locationSettings: const LocationSettings(
-          accuracy: LocationAccuracy.best,
-          distanceFilter: 5,
-        ),
-      );
-      _positionStream!.listen((Position position) {
-        debugPrint('موقع الباص الجديد: ${position.latitude}, ${position.longitude}');
-        if (!mounted) return;
+      // الحصول على الموقع الحالي
+      try {
+        debugPrint('جاري الحصول على الموقع الحالي...');
+        final currentPosition = await Geolocator.getCurrentPosition(
+          desiredAccuracy: LocationAccuracy.high,
+        );
+        debugPrint('تم الحصول على الموقع: ${currentPosition.latitude}, ${currentPosition.longitude}');
+        
         setState(() {
-          busLocation = LatLng(position.latitude, position.longitude);
-          busAccuracy = position.accuracy;
+          busLocation = LatLng(currentPosition.latitude, currentPosition.longitude);
+          schoolLocation = LatLng(currentPosition.latitude, currentPosition.longitude);
+          debugPrint('تم تعيين busLocation: $busLocation');
         });
-        // تحديث الخريطة لموقع الباص الجديد
-        _mapController.move(LatLng(position.latitude, position.longitude), 15);
-      });
+        
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('تم تحديد موقع الحافلة: ${currentPosition.latitude.toStringAsFixed(4)}, ${currentPosition.longitude.toStringAsFixed(4)}')),
+        );
+        
+        // بدء تتبع الموقع
+        _positionStream = Geolocator.getPositionStream(
+          locationSettings: const LocationSettings(
+            accuracy: LocationAccuracy.best,
+            distanceFilter: 5,
+          ),
+        );
+        _positionStream!.listen((Position position) {
+          debugPrint('موقع الباص الجديد: ${position.latitude}, ${position.longitude}');
+          if (!mounted) return;
+          setState(() {
+            busLocation = LatLng(position.latitude, position.longitude);
+            busAccuracy = position.accuracy;
+          });
+          // تحديث الخريطة لموقع الباص الجديد
+          _mapController.move(LatLng(position.latitude, position.longitude), 15);
+        });
+      } catch (e) {
+        debugPrint('خطأ في الحصول على الموقع: $e');
+        // استخدام موقع افتراضي في حالة الفشل
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('الموقع غير متوفر على هذا الجهاز. سيتم استخدام موقع افتراضي (الرياض).')),
+        );
+        setState(() {
+          busLocation = const LatLng(24.7136, 46.6753); // الرياض
+          schoolLocation = const LatLng(24.7136, 46.6753);
+        });
+      }
     } catch (e) {
-      debugPrint('خطأ في الحصول على الموقع: $e');
+      debugPrint('خطأ عام في تهيئة الموقع: $e');
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('خطأ في تحديد الموقع: $e')),
+        SnackBar(content: Text('خطأ في تهيئة الموقع: $e')),
       );
     }
     
