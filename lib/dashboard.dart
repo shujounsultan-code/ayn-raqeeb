@@ -48,6 +48,51 @@ class _DashboardPageState extends State<DashboardPage> {
   bool _postalLoading = false;
   String? _highlightStudentId;
   String? _selectedStudentId; // الطالب المختار لعرض موقعه فقط
+  final List<Map<String, dynamic>> _trail = [];
+  static const int _maxTrailPoints = 120;
+
+  Future<void> _sendBusLocationToFirestore(Position position) async {
+    final driver = DriverSession.currentDriver;
+    if (driver == null) return;
+
+    final schoolId = driver['school_id']?.toString().trim() ?? '';
+    final busNumber = driver['bus_number']?.toString().trim() ?? '';
+
+    if (schoolId.isEmpty || busNumber.isEmpty) {
+      debugPrint('Dashboard: لا يوجد معرف المدرسة أو رقم الحافلة');
+      return;
+    }
+
+    final busDocId = '${schoolId}_$busNumber';
+
+    // إضافة النقطة الحالية للمسار
+    _trail.add({
+      'lat': position.latitude,
+      'lng': position.longitude,
+      't': DateTime.now().millisecondsSinceEpoch,
+    });
+
+    // الحفاظ على آخر 120 نقطة فقط
+    if (_trail.length > _maxTrailPoints) {
+      _trail.removeRange(0, _trail.length - _maxTrailPoints);
+    }
+
+    // إرسال الموقع إلى Firestore
+    try {
+      await FirebaseFirestore.instance.collection('bus_locations').doc(busDocId).set({
+        'lat': position.latitude,
+        'lng': position.longitude,
+        'accuracy': position.accuracy,
+        'school_id': schoolId,
+        'bus_number': busNumber,
+        'trail': List<Map<String, dynamic>>.from(_trail),
+        'updated_at': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
+      debugPrint('Dashboard: تم إرسال الموقع إلى Firestore');
+    } catch (e) {
+      debugPrint('Dashboard: خطأ في إرسال الموقع إلى Firestore: $e');
+    }
+  }
 
   @override
   void initState() {
@@ -66,11 +111,11 @@ class _DashboardPageState extends State<DashboardPage> {
   Future<void> _initLocationStream() async {
     debugPrint('=== بدء _initLocationStream ===');
     debugPrint('المنصة الحالية: ${kIsWeb ? "Web" : isWindows ? "Windows" : "Mobile"}');
-    
+
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(content: Text('جاري تهيئة خدمة الموقع...')),
     );
-    
+
     try {
       // فحص خدمة الموقع (متاح فقط على الموبايل)
       bool serviceEnabled = true;
@@ -78,44 +123,44 @@ class _DashboardPageState extends State<DashboardPage> {
         serviceEnabled = await Geolocator.isLocationServiceEnabled();
         debugPrint('خدمة الموقع مفعلة: $serviceEnabled');
       }
-      
+
       if (!serviceEnabled) {
         debugPrint('خدمة الموقع غير مفعلة');
         _showLocationServiceDialog();
         return;
       }
-      
+
       // فحص وطلب الإذن (متاح فقط على الموبايل)
       LocationPermission permission = LocationPermission.always;
       if (!kIsWeb && !isWindows) {
         permission = await Geolocator.checkPermission();
         debugPrint('إذن الموقع الحالي: $permission');
-        
+
         // طلب الإذن دائماً إذا لم يكن ممنوحاً
         if (permission == LocationPermission.denied || permission == LocationPermission.deniedForever) {
           debugPrint('طلب إذن الموقع...');
           permission = await Geolocator.requestPermission();
           debugPrint('إذن الموقع بعد الطلب: $permission');
         }
-        
+
         if (permission == LocationPermission.deniedForever) {
           debugPrint('تم رفض الإذن نهائياً');
           _showPermissionForeverDeniedDialog();
           return;
         }
-        
+
         if (permission == LocationPermission.denied) {
           debugPrint('تم رفض الإذن');
           _showPermissionDeniedDialog();
           return;
         }
       }
-      
+
       debugPrint('تم منح إذن الموقع، جاري تحديد الموقع...');
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('جاري تحديد الموقع...')),
       );
-      
+
       // الحصول على الموقع الحالي
       try {
         debugPrint('جاري الحصول على الموقع الحالي...');
@@ -123,17 +168,20 @@ class _DashboardPageState extends State<DashboardPage> {
           desiredAccuracy: LocationAccuracy.high,
         );
         debugPrint('تم الحصول على الموقع: ${currentPosition.latitude}, ${currentPosition.longitude}');
-        
+
         setState(() {
           busLocation = LatLng(currentPosition.latitude, currentPosition.longitude);
           schoolLocation = LatLng(currentPosition.latitude, currentPosition.longitude);
           debugPrint('تم تعيين busLocation: $busLocation');
         });
-        
+
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('تم تحديد موقع الحافلة: ${currentPosition.latitude.toStringAsFixed(4)}, ${currentPosition.longitude.toStringAsFixed(4)}')),
         );
-        
+
+        // إرسال الموقع الأولي إلى Firestore
+        _sendBusLocationToFirestore(currentPosition);
+
         // بدء تتبع الموقع
         _positionStream = Geolocator.getPositionStream(
           locationSettings: const LocationSettings(
@@ -150,6 +198,8 @@ class _DashboardPageState extends State<DashboardPage> {
           });
           // تحديث الخريطة لموقع الباص الجديد
           _mapController.move(LatLng(position.latitude, position.longitude), 15);
+          // إرسال الموقع إلى Firestore ليتتبعه ولي الأمر
+          _sendBusLocationToFirestore(position);
         });
       } catch (e) {
         debugPrint('خطأ في الحصول على الموقع: $e');
