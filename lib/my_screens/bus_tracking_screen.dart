@@ -44,7 +44,7 @@ class BusTrackingScreenState extends State<BusTrackingScreen> {
                         },
                         child: const Icon(
                           Icons.notifications_none,
-                          size: 28,
+                          size: 31,
                           color: Colors.black,
                         ),
                       ),
@@ -55,7 +55,7 @@ class BusTrackingScreenState extends State<BusTrackingScreen> {
                         },
                         child: const Icon(
                           Icons.chat_bubble_outline,
-                          size: 28,
+                          size: 30,
                           color: Colors.black,
                         ),
                       ),
@@ -66,16 +66,16 @@ class BusTrackingScreenState extends State<BusTrackingScreen> {
                     children: [
                       Image.asset(
                         'assets/images/logobg.png',
-                        width: 95,
-                        height: 70,
+                        width: 90,
+                        height: 64,
                         fit: BoxFit.contain,
                       ),
                       Transform.translate(
-                        offset: const Offset(0, -10),
+                        offset: const Offset(0, -8),
                         child: const Text(
                           'عين رقيب',
                           style: TextStyle(
-                            fontSize: 16,
+                            fontSize: 17,
                             fontWeight: FontWeight.bold,
                             color: teal,
                           ),

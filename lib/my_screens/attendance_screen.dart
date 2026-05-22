@@ -93,15 +93,12 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
       textDirection: TextDirection.rtl,
       child: Scaffold(
         backgroundColor: Colors.white,
-
         body: SafeArea(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-
               const SizedBox(height: 12),
 
-              // الهيدر
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 20),
                 child: Row(
@@ -109,8 +106,6 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   textDirection: TextDirection.rtl,
                   children: [
-
-                    // اللوقو
                     Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
@@ -126,7 +121,6 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                             color: mainColor,
                           ),
                         ),
-
                         Transform.translate(
                           offset: const Offset(0, -8),
                           child: const Text(
@@ -141,45 +135,42 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                       ],
                     ),
 
-                    // التنبيهات والرسائل
-                    Row(
-                      children: [
-
-                        InkWell(
-                          onTap: () => _showMessage(
-                            'التنبيهات تظهر تلقائياً عند وجودها',
+                    Padding(
+                      padding: const EdgeInsets.only(top: 18),
+                      child: Row(
+                        children: [
+                          InkWell(
+                            onTap: () =>
+                                _showMessage('لا توجد رسائل حالياً'),
+                            child: const Icon(
+                              Icons.chat_bubble_outline,
+                              size: 30,
+                              color: Colors.black,
+                            ),
                           ),
-                          child: const Icon(
-                            Icons.notifications_none,
-                            size: 25,
-                            color: Colors.black,
+                          const SizedBox(width: 14),
+                          InkWell(
+                            onTap: () => _showMessage(
+                              'التنبيهات تظهر تلقائياً عند وجودها',
+                            ),
+                            child: const Icon(
+                              Icons.notifications_none,
+                              size: 31,
+                              color: Colors.black,
+                            ),
                           ),
-                        ),
-
-                        const SizedBox(width: 12),
-
-                        InkWell(
-                          onTap: () =>
-                              _showMessage('لا توجد رسائل حالياً'),
-                          child: const Icon(
-                            Icons.chat_bubble_outline,
-                            size: 23,
-                            color: Colors.black,
-                          ),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
                   ],
                 ),
               ),
 
-              // بيانات ولي الأمر
               Padding(
                 padding: const EdgeInsets.fromLTRB(20, 4, 20, 8),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
-
                     Text(
                       ParentSession.parentName ?? 'سحر محمد',
                       textAlign: TextAlign.right,
@@ -188,7 +179,6 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                         fontWeight: FontWeight.bold,
                       ),
                     ),
-
                     if ((ParentSession.parentPhone ?? '').isNotEmpty)
                       Text(
                         'جوال: ${ParentSession.parentPhone}',
@@ -202,7 +192,6 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                 ),
               ),
 
-              // المدرسة
               if (schoolId.isNotEmpty)
                 StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
                   stream: FirebaseFirestore.instance
@@ -210,7 +199,6 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                       .doc(schoolId)
                       .snapshots(),
                   builder: (context, sch) {
-
                     final name =
                         sch.data?.data()?['school_name']?.toString() ??
                             'المدرسة';
@@ -246,11 +234,8 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                 child: StreamBuilder<
                     List<DocumentSnapshot<Map<String, dynamic>>>>(
                   stream: parentLinkedStudentsStream(),
-
                   builder: (context, snap) {
-
-                    if (snap.connectionState ==
-                            ConnectionState.waiting &&
+                    if (snap.connectionState == ConnectionState.waiting &&
                         !snap.hasData) {
                       return const Center(
                         child: CircularProgressIndicator(),
@@ -284,11 +269,8 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                       );
                     }
 
-                    final effId =
-                        _effectiveStudentDocId(docs);
-
-                    final selected =
-                        _docById(docs, effId);
+                    final effId = _effectiveStudentDocId(docs);
+                    final selected = _docById(docs, effId);
 
                     if (selected == null || !selected.exists) {
                       return const Center(
@@ -299,54 +281,36 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                     final m = studentDocAsMap(selected);
 
                     return SingleChildScrollView(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 20,
-                      ),
-
+                      padding: const EdgeInsets.symmetric(horizontal: 20),
                       child: Column(
-                        crossAxisAlignment:
-                            CrossAxisAlignment.stretch,
-
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
-
-                          // اختيار الطالب
                           if (docs.length > 1)
                             DropdownButtonFormField<String>(
                               value: effId,
-
                               decoration: const InputDecoration(
                                 labelText: 'الطالب',
                                 border: OutlineInputBorder(),
                               ),
-
                               items: docs.map((d) {
-
                                 final n =
-                                    d.data()?['name']
-                                            ?.toString() ??
-                                        d.id;
+                                    d.data()?['name']?.toString() ?? d.id;
 
                                 return DropdownMenuItem(
                                   value: d.id,
-
                                   child: Align(
-                                    alignment:
-                                        Alignment.centerRight,
-
+                                    alignment: Alignment.centerRight,
                                     child: Text(
                                       n,
-                                      textAlign:
-                                          TextAlign.right,
+                                      textAlign: TextAlign.right,
                                     ),
                                   ),
                                 );
                               }).toList(),
-
                               onChanged: (v) {
                                 if (v != null) {
                                   setState(() {
-                                    _selectedStudentDocId =
-                                        v;
+                                    _selectedStudentDocId = v;
                                   });
                                 }
                               },
@@ -356,45 +320,28 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
 
                           const SizedBox(height: 16),
 
-                          // الكرت
                           Container(
                             padding: const EdgeInsets.all(16),
-
                             decoration: BoxDecoration(
-                              borderRadius:
-                                  BorderRadius.circular(13),
-
+                              borderRadius: BorderRadius.circular(13),
                               border: Border.all(
                                 color: Colors.grey.shade300,
                               ),
                             ),
-
                             child: Column(
-                              crossAxisAlignment:
-                                  CrossAxisAlignment.end,
-
+                              crossAxisAlignment: CrossAxisAlignment.end,
                               children: [
-
                                 Align(
-                                  alignment:
-                                      Alignment.centerRight,
-
+                                  alignment: Alignment.centerRight,
                                   child: ClipRRect(
-                                    borderRadius:
-                                        BorderRadius.circular(9),
-
+                                    borderRadius: BorderRadius.circular(9),
                                     child: Image.asset(
                                       'assets/images/student.png',
                                       width: 140,
                                       height: 68,
                                       fit: BoxFit.cover,
-
                                       errorBuilder:
-                                          (
-                                        context,
-                                        error,
-                                        stackTrace,
-                                      ) =>
+                                          (context, error, stackTrace) =>
                                               const Icon(
                                         Icons.person,
                                         size: 64,
@@ -409,12 +356,10 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                                   'الاسم',
                                   m['name']?.toString() ?? '—',
                                 ),
-
                                 _infoLine(
                                   'الصف',
                                   m['grade']?.toString() ?? '—',
                                 ),
-
                                 _infoLine(
                                   'رقم الباص',
                                   m['bus']?.toString() ?? '—',
@@ -439,36 +384,21 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
 
                           const SizedBox(height: 18),
 
-                          // حاضر وغائب
                           Row(
                             textDirection: TextDirection.rtl,
                             children: [
-
                               Expanded(
                                 child: InkWell(
                                   onTap: () =>
-                                      _registerStatus(
-                                    'حاضر',
-                                    effId,
-                                  ),
-
+                                      _registerStatus('حاضر', effId),
                                   child: Container(
                                     height: 54,
-
                                     decoration: BoxDecoration(
-                                      color:
-                                          _status == 'حاضر'
-                                              ? Colors
-                                                  .green
-                                                  .shade700
-                                              : Colors.green,
-
-                                      borderRadius:
-                                          BorderRadius.circular(
-                                        8,
-                                      ),
+                                      color: _status == 'حاضر'
+                                          ? Colors.green.shade700
+                                          : Colors.green,
+                                      borderRadius: BorderRadius.circular(8),
                                     ),
-
                                     child: const Center(
                                       child: Text(
                                         'حاضر',
@@ -487,28 +417,15 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                               Expanded(
                                 child: InkWell(
                                   onTap: () =>
-                                      _registerStatus(
-                                    'غائب',
-                                    effId,
-                                  ),
-
+                                      _registerStatus('غائب', effId),
                                   child: Container(
                                     height: 54,
-
                                     decoration: BoxDecoration(
-                                      color:
-                                          _status == 'غائب'
-                                              ? Colors
-                                                  .red
-                                                  .shade700
-                                              : Colors.red,
-
-                                      borderRadius:
-                                          BorderRadius.circular(
-                                        8,
-                                      ),
+                                      color: _status == 'غائب'
+                                          ? Colors.red.shade700
+                                          : Colors.red,
+                                      borderRadius: BorderRadius.circular(8),
                                     ),
-
                                     child: const Center(
                                       child: Text(
                                         'غائب',
@@ -545,32 +462,25 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
   }) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 16),
-
       child: Row(
         textDirection: TextDirection.rtl,
         children: [
-
           SizedBox(
             width: 95,
-
             child: Text(
               '$label:',
               textAlign: TextAlign.right,
-
               style: const TextStyle(
                 fontWeight: FontWeight.bold,
                 fontSize: 15,
               ),
             ),
           ),
-
           const SizedBox(width: 14),
-
           Expanded(
             child: Text(
               value,
               textAlign: TextAlign.right,
-
               style: TextStyle(
                 fontSize: 15,
                 fontWeight: FontWeight.w500,

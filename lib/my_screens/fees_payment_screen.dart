@@ -235,12 +235,12 @@ class _FeesPaymentScreenState extends State<FeesPaymentScreen> {
                   children: [
                     InkWell(
                       onTap: () => _showMessage('التنبيهات'),
-                      child: const Icon(Icons.notifications_none, size: 28),
+                      child: const Icon(Icons.notifications_none, size: 31),
                     ),
                     const SizedBox(width: 10),
                     InkWell(
                       onTap: () => _showMessage('لا توجد رسائل حالياً'),
-                      child: const Icon(Icons.chat_bubble_outline, size: 26),
+                      child: const Icon(Icons.chat_bubble_outline, size: 30),
                     ),
                     const Spacer(),
                     Column(
