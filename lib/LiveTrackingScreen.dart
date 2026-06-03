@@ -253,6 +253,38 @@ class _LiveTrackingScreenState extends State<LiveTrackingScreen> {
                       _locations[loc.busNumber] = loc;
                     } catch (_) {}
                   }
+                  
+                  // تحديث موقع الخريطة إذا تم تحديد باص معين
+                  if (_selectedBusNumber != null && _locations.containsKey(_selectedBusNumber)) {
+                    final activeLoc = _locations[_selectedBusNumber]!;
+                    WidgetsBinding.instance.addPostFrameCallback((_) {
+                      _mapController.move(LatLng(activeLoc.lat, activeLoc.lng), _mapController.camera.zoom);
+                    });
+                  }
+                }
+                return StreamBuilder<QuerySnapshot>(
+                  stream: _busInfoStream,
+                  builder: (context, infoSnapshot) {
+                    if (infoSnapshot.hasData) {
+                      _buses = infoSnapshot.data!.docs
+                          .map((doc) => BusInfo.fromFirestore(doc.id, doc.data() as Map<String, dynamic>))
+                          .toList();
+                    }
+                    return _buildContent();
+                  },
+                );
+              },
+            );
+          },
+        ),
+      ),
+    );
+  }
+                    try {
+                      final loc = BusLocation.fromFirestore(data);
+                      _locations[loc.busNumber] = loc;
+                    } catch (_) {}
+                  }
                 }
                 return StreamBuilder<QuerySnapshot>(
                   stream: _busInfoStream,
@@ -523,8 +555,9 @@ class _LiveTrackingScreenState extends State<LiveTrackingScreen> {
               ),
               children: [
                 TileLayer(
-                  urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-                  userAgentPackageName: 'com.example.app',
+                  urlTemplate: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+                  subdomains: const ['a', 'b', 'c'],
+                  userAgentPackageName: 'com.appaynraqeeb.ayn_raqeeb',
                 ),
                 PolylineLayer(polylines: polylines),
                 MarkerLayer(markers: markers),

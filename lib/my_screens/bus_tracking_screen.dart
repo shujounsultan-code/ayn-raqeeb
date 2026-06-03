@@ -29,6 +29,10 @@ class BusTrackingScreenState extends State<BusTrackingScreen> {
   List<LatLng> routeToStudent = [];
   MapController _mapController = MapController();
   StreamSubscription<DocumentSnapshot>? _busLocationSubscription;
+  StreamSubscription<QuerySnapshot>? _boardingSubscription;
+  bool isStudentOnBus = false;
+  String? activeBusDocId;
+  bool _mapReady = false;
 
   // بيانات الرحلة والطلاب
   List<Map<String, dynamic>> studentsOnRoute = [];
@@ -49,12 +53,13 @@ class BusTrackingScreenState extends State<BusTrackingScreen> {
     super.initState();
     _fetchStudentHomeLocation();
     _fetchStudentsOnRoute();
-    _startBusLocationTracking();
+    _startBoardingListener();
   }
 
   @override
   void dispose() {
     _busLocationSubscription?.cancel();
+    _boardingSubscription?.cancel();
     super.dispose();
   }
 
@@ -87,6 +92,10 @@ class BusTrackingScreenState extends State<BusTrackingScreen> {
           studentHomeLocation = LatLng(homeLat, homeLng);
         });
         debugPrint('BusTrackingScreen: موقع بيت الطالب: $homeLat, $homeLng');
+        // جلب المسار إذا كان موقع الباص متوفراً
+        if (busLocation != null) {
+          _fetchRouteToStudent();
+        }
       }
     } catch (e) {
       debugPrint('BusTrackingScreen: خطأ في جلب موقع بيت الطالب: $e');
@@ -269,32 +278,87 @@ class BusTrackingScreenState extends State<BusTrackingScreen> {
     }
   }
 
-  void _startBusLocationTracking() {
-    // الحصول على البيانات من parent_session مباشرة
-    final schoolId = ParentSession.schoolIdFromParent;
-    final busNumber = ParentSession.studentBusOnParent;
+  void _startBoardingListener() {
+    final studentDocId = ParentSession.studentDocId;
+    if (studentDocId == null) return;
 
-    if (schoolId == null || schoolId.isEmpty) {
-      debugPrint('BusTrackingScreen: لا يوجد معرف المدرسة');
-      return;
-    }
+    final sixHoursAgo = DateTime.now().subtract(const Duration(hours: 6));
 
-    if (busNumber == null || busNumber.isEmpty) {
-      debugPrint('BusTrackingScreen: لا يوجد رقم الحافلة');
-      return;
-    }
+    // الاستماع المباشر لأحداث الصعود (Boarding Events)
+    _boardingSubscription = FirebaseFirestore.instance
+        .collection('board_events')
+        .where('student_doc_id', isEqualTo: studentDocId)
+        .snapshots()
+        .listen((snapshot) {
+      if (!mounted) return;
+      
+      if (snapshot.docs.isNotEmpty) {
+        // ترتيب يدوياً لضمان الدقة وتجنب مشاكل الفهرسة (Indexing)
+        final docs = snapshot.docs.toList();
+        docs.sort((a, b) {
+          final ta = a.data() as Map<String, dynamic>;
+          final tb = b.data() as Map<String, dynamic>;
+          
+          // استخدام created_at_ms كمفتاح ترتيب أدق في حال كان created_at لم يطبق بعد
+          final ma = ta['created_at_ms'] as num? ?? 0;
+          final mb = tb['created_at_ms'] as num? ?? 0;
+          return mb.compareTo(ma);
+        });
 
-    final busDocId = '${schoolId}_$busNumber';
-    debugPrint('BusTrackingScreen: بدء تتبع الحافلة $busDocId');
+        final data = docs.first.data() as Map<String, dynamic>;
+        final createdAt = data['created_at'] as Timestamp?;
+        final createdAtMs = data['created_at_ms'] as num?;
+        
+        DateTime? eventTime;
+        if (createdAt != null) {
+          eventTime = createdAt.toDate();
+        } else if (createdAtMs != null) {
+          eventTime = DateTime.fromMillisecondsSinceEpoch(createdAtMs.toInt());
+        }
+        
+        // التحقق من أن الحدث حديث (خلال آخر 8 ساعات)
+        if (eventTime != null && 
+            DateTime.now().difference(eventTime).inHours < 8) {
+          final busNumber = data['bus_number']?.toString();
+          final schoolId = data['school_id']?.toString();
 
-    // الاستماع لموقع الحافلة
+          if (busNumber != null && schoolId != null) {
+            final newBusDocId = '${schoolId}_$busNumber';
+            
+            // تحديث الحالة حتى لو كان نفس الباص لضمان استمرار التتبع
+            setState(() {
+              isStudentOnBus = true;
+              currentStatus = 'on_bus';
+              activeBusDocId = newBusDocId;
+            });
+            
+            // إعادة جلب موقع منزل الطالب للتأكد من تحديثه (خاصة إذا تم تحديثه من الرمز البريدي عند المسح)
+            _fetchStudentHomeLocation();
+            _listenToBusLocation(newBusDocId);
+            return;
+          }
+        }
+      }
+      
+      setState(() {
+        isStudentOnBus = false;
+        busLocation = null;
+        currentStatus = 'waiting';
+        activeBusDocId = null;
+      });
+    });
+  }
+
+  void _listenToBusLocation(String busDocId) {
+    _busLocationSubscription?.cancel();
+    debugPrint('BusTrackingScreen: تتبع الحافلة المحددة للطالب: $busDocId');
+
     _busLocationSubscription = FirebaseFirestore.instance
         .collection('bus_locations')
         .doc(busDocId)
         .snapshots()
         .listen((snapshot) {
       if (!mounted) return;
-
       if (snapshot.exists) {
         final data = snapshot.data();
         if (data != null) {
@@ -311,21 +375,19 @@ class BusTrackingScreenState extends State<BusTrackingScreen> {
                 );
               }
             });
-
-            // تحديث مركز الخريطة
-            _mapController.move(LatLng(lat, lng), 16);
-
-            // جلب المسار إلى بيت الطالب
+            if (_mapReady) {
+              _mapController.move(LatLng(lat, lng), 16);
+            }
             _fetchRouteToStudent();
-
-            // تحديث حالة الطالب بناءً على موقع الحافلة
             _updateStudentStatus();
           }
         }
       }
-    }, onError: (error) {
-      debugPrint('BusTrackingScreen: خطأ في تتبع الحافلة: $error');
     });
+  }
+
+  void _startBusLocationTracking() {
+    // تم استبدالها بـ _startBoardingListener لضمان الأمان
   }
 
   void _toggleMapExpanded() {
@@ -358,6 +420,14 @@ class BusTrackingScreenState extends State<BusTrackingScreen> {
                 children: [
                   Row(
                     children: [
+                      IconButton(
+                        icon: const Icon(Icons.refresh, color: teal),
+                        onPressed: () {
+                          _startBoardingListener();
+                          _fetchStudentHomeLocation();
+                          showMessage('جاري تحديث البيانات...');
+                        },
+                      ),
                       InkWell(
                         onTap: () {
                           showMessage('فتح صفحة التنبيهات');
@@ -481,129 +551,122 @@ class BusTrackingScreenState extends State<BusTrackingScreen> {
                     padding: const EdgeInsets.symmetric(horizontal: 16),
                     child: ClipRRect(
                       borderRadius: BorderRadius.circular(12),
-                      child: FlutterMap(
-                        mapController: _mapController,
-                        options: MapOptions(
-                          initialCenter: busLocation ?? defaultLocation,
-                          initialZoom: 15,
-                        ),
+                      child: Stack(
                         children: [
-                          TileLayer(
-                            urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-                            userAgentPackageName: 'com.example.ayn_raqeeb',
-                          ),
-                          // عرض المسار إلى بيت الطالب
-                          if (routeToStudent.isNotEmpty)
-                            PolylineLayer(
-                              polylines: [
-                                Polyline(
-                                  points: routeToStudent,
-                                  strokeWidth: 5.0,
-                                  color: Colors.blue.withOpacity(0.8),
-                                ),
-                              ],
+                          FlutterMap(
+                            mapController: _mapController,
+                            options: MapOptions(
+                              initialCenter: busLocation ?? defaultLocation,
+                              initialZoom: 15,
+                              onMapReady: () {
+                                setState(() {
+                                  _mapReady = true;
+                                });
+                                if (busLocation != null) {
+                                  _mapController.move(busLocation!, 16);
+                                }
+                              },
                             ),
-                          MarkerLayer(
-                            markers: [
-                              // موقع الحافلة الحالي
-                              if (busLocation != null)
-                                Marker(
-                                  point: busLocation!,
-                                  width: 60,
-                                  height: 60,
-                                  child: Container(
-                                    decoration: BoxDecoration(
-                                      shape: BoxShape.circle,
-                                      border: Border.all(color: teal, width: 3),
-                                      color: Colors.white,
-                                      boxShadow: [
-                                        BoxShadow(
-                                          color: Colors.black.withOpacity(0.3),
-                                          blurRadius: 8,
-                                          offset: const Offset(0, 2),
+                            children: [
+                              TileLayer(
+                                urlTemplate: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+                                subdomains: const ['a', 'b', 'c'],
+                                userAgentPackageName: 'com.appaynraqeeb.ayn_raqeeb',
+                              ),
+                              // عرض المسار إلى بيت الطالب
+                              if (routeToStudent.isNotEmpty)
+                                PolylineLayer(
+                                  polylines: [
+                                    Polyline(
+                                      points: routeToStudent,
+                                      strokeWidth: 5.0,
+                                      color: Colors.blue.withOpacity(0.8),
+                                    ),
+                                  ],
+                                ),
+                              MarkerLayer(
+                                markers: [
+                                  // موقع الحافلة الحالي
+                                  if (busLocation != null)
+                                    Marker(
+                                      point: busLocation!,
+                                      width: 60,
+                                      height: 60,
+                                      child: Container(
+                                        decoration: BoxDecoration(
+                                          shape: BoxShape.circle,
+                                          border: Border.all(color: teal, width: 3),
+                                          color: Colors.white,
+                                          boxShadow: [
+                                            BoxShadow(
+                                              color: Colors.black.withOpacity(0.3),
+                                              blurRadius: 8,
+                                              offset: const Offset(0, 2),
+                                            ),
+                                          ],
                                         ),
-                                      ],
+                                        child: const Icon(Icons.directions_bus, color: teal, size: 30),
+                                      ),
                                     ),
-                                    child: const Icon(
-                                      Icons.directions_bus_filled,
-                                      color: teal,
-                                      size: 36,
+                                  // موقع بيت الطالب
+                                  if (studentHomeLocation != null)
+                                    Marker(
+                                      point: studentHomeLocation!,
+                                      width: 45,
+                                      height: 45,
+                                      child: const Icon(Icons.home, color: Colors.red, size: 40),
                                     ),
-                                  ),
-                                ),
-                              // موقع افتراضي إذا لم يكن هناك موقع
-                              if (busLocation == null)
-                                Marker(
-                                  point: defaultLocation,
-                                  width: 60,
-                                  height: 60,
-                                  child: Container(
-                                    decoration: BoxDecoration(
-                                      shape: BoxShape.circle,
-                                      border: Border.all(color: Colors.grey, width: 2),
-                                      color: Colors.grey.withOpacity(0.2),
-                                    ),
-                                    child: const Icon(
-                                      Icons.location_searching,
-                                      color: Colors.grey,
-                                      size: 36,
-                                    ),
-                                  ),
-                                ),
-                              // موقع بيت الطالب
-                              if (studentHomeLocation != null)
-                                Marker(
-                                  point: studentHomeLocation!,
-                                  width: 60,
-                                  height: 60,
-                                  child: Container(
-                                    decoration: BoxDecoration(
-                                      shape: BoxShape.circle,
-                                      border: Border.all(color: Colors.green, width: 3),
-                                      color: Colors.white,
-                                      boxShadow: [
-                                        BoxShadow(
-                                          color: Colors.black.withOpacity(0.3),
-                                          blurRadius: 8,
-                                          offset: const Offset(0, 2),
-                                        ),
-                                      ],
-                                    ),
-                                    child: const Icon(
-                                      Icons.home,
-                                      color: Colors.green,
-                                      size: 36,
-                                    ),
-                                  ),
-                                ),
+                                ],
+                              ),
                             ],
                           ),
+                          if (!isStudentOnBus)
+                            Container(
+                              color: Colors.black.withOpacity(0.5),
+                              child: Center(
+                                child: Container(
+                                  padding: const EdgeInsets.all(20),
+                                  margin: const EdgeInsets.symmetric(horizontal: 40),
+                                  decoration: BoxDecoration(
+                                    color: Colors.white,
+                                    borderRadius: BorderRadius.circular(15),
+                                  ),
+                                  child: Column(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      const Icon(Icons.hourglass_empty, color: teal, size: 50),
+                                      const SizedBox(height: 15),
+                                      const Text(
+                                        'بانتظار ركوب الطالب',
+                                        style: TextStyle(
+                                          fontSize: 18,
+                                          fontWeight: FontWeight.bold,
+                                          color: Colors.black,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 8),
+                                      const Text(
+                                        'سيتم تفعيل التتبع اللحظي بمجرد قيام السائق بمسح باركود الطالب',
+                                        textAlign: TextAlign.center,
+                                        style: TextStyle(fontSize: 14, color: Colors.grey),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ),
                         ],
                       ),
                     ),
                   ),
-                  // زر فتح الخريطة بشكل كامل
                   Positioned(
                     top: 10,
                     right: 26,
-                    child: Container(
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(8),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withOpacity(0.2),
-                            blurRadius: 4,
-                            offset: const Offset(0, 2),
-                          ),
-                        ],
-                      ),
-                      child: IconButton(
-                        icon: const Icon(Icons.fullscreen),
-                        onPressed: _toggleMapExpanded,
-                        color: teal,
-                        tooltip: 'فتح الخريطة بشكل كامل',
-                      ),
+                    child: FloatingActionButton.small(
+                      heroTag: 'expandMap',
+                      backgroundColor: Colors.white,
+                      onPressed: _toggleMapExpanded,
+                      child: const Icon(Icons.fullscreen, color: teal),
                     ),
                   ),
                 ],

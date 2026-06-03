@@ -6,6 +6,7 @@ import 'widgets/back_button_widget.dart';
 import 'school_info_screen.dart';
 import 'drivers_screen.dart';
 import 'bus_alerts_screen.dart';
+import 'role_selection_screen.dart';
 import 'settings_screen.dart';
 import 'login_screen.dart';
 
@@ -143,7 +144,7 @@ class _ProfileSchoolScreenState extends State<ProfileSchoolScreen> {
       onTap: () {
         Navigator.pushAndRemoveUntil(
           context,
-          MaterialPageRoute(builder: (_) => const LoginScreen()),
+          MaterialPageRoute(builder: (_) => const RoleSelectionScreen()),
           (route) => false,
         );
       },

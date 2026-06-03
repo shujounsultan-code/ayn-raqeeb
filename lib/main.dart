@@ -81,7 +81,10 @@ class _MainNavigationState extends State<MainNavigation> {
     return Directionality(
       textDirection: TextDirection.rtl,
       child: Scaffold(
-        body: _pages[_selectedIndex],
+        body: IndexedStack(
+          index: _selectedIndex,
+          children: _pages,
+        ),
         bottomNavigationBar: BottomNavigationBar(
           currentIndex: _selectedIndex,
           onTap: (index) => setState(() => _selectedIndex = index),
@@ -155,10 +158,21 @@ class _ParentNavigationState extends State<ParentNavigation> {
       final body = data['body']?.toString() ??
           data['title']?.toString() ??
           'تنبيه جديد';
+      
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(body, textAlign: TextAlign.right),
-          duration: const Duration(seconds: 5),
+          duration: const Duration(seconds: 8),
+          action: SnackBarAction(
+            label: 'تتبع الآن',
+            textColor: Colors.white,
+            onPressed: () {
+              setState(() {
+                _selectedIndex = 1; // الانتقال لتبويب الخريطة
+              });
+            },
+          ),
+          backgroundColor: const Color(0xFF1B7C80),
         ),
       );
       doc.reference.update({'read': true});
@@ -223,8 +237,8 @@ class _ParentNavigationState extends State<ParentNavigation> {
         unselectedItemColor: Colors.grey,
         items: const [
           BottomNavigationBarItem(
-            icon: Icon(Icons.check_circle_outline),
-            label: 'الحضور',
+            icon: Icon(Icons.home_outlined),
+            label: 'الرئيسية',
           ),
           BottomNavigationBarItem(
             icon: Icon(Icons.location_on_outlined),

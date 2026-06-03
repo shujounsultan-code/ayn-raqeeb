@@ -2,6 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import '../parent_session.dart';
 import 'parent_student_scope.dart';
+import '../parent_login_screen.dart';
 
 class AttendanceScreen extends StatefulWidget {
   const AttendanceScreen({super.key});
@@ -56,6 +57,16 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
         ),
         duration: const Duration(seconds: 2),
         behavior: SnackBarBehavior.floating,
+      ),
+    );
+  }
+
+  void _logout() {
+    ParentSession.clear();
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(
+        builder: (context) => const ParentLoginScreen(),
       ),
     );
   }
@@ -157,6 +168,15 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                               Icons.notifications_none,
                               size: 31,
                               color: Colors.black,
+                            ),
+                          ),
+                          const SizedBox(width: 14),
+                          InkWell(
+                            onTap: _logout,
+                            child: const Icon(
+                              Icons.logout,
+                              size: 30,
+                              color: Colors.red,
                             ),
                           ),
                         ],
@@ -320,13 +340,22 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
 
                           const SizedBox(height: 16),
 
+                          // بطاقة معلومات الطالب
                           Container(
                             padding: const EdgeInsets.all(16),
                             decoration: BoxDecoration(
+                              color: Colors.white,
                               borderRadius: BorderRadius.circular(13),
                               border: Border.all(
                                 color: Colors.grey.shade300,
                               ),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withOpacity(0.05),
+                                  blurRadius: 10,
+                                  offset: const Offset(0, 2),
+                                ),
+                              ],
                             ),
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.end,
@@ -370,75 +399,111 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
 
                           const SizedBox(height: 24),
 
-                          Center(
-                            child: Text(
-                              'يرجى تحديد حالة حضور الطالب لهذا اليوم',
-                              textAlign: TextAlign.center,
-                              style: TextStyle(
-                                fontSize: 15,
-                                fontWeight: FontWeight.w600,
-                                color: Colors.grey.shade700,
+                          // خانة تسجيل حضور/غياب الطالب
+                          Container(
+                            padding: const EdgeInsets.all(16),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFEAF6F6),
+                              borderRadius: BorderRadius.circular(13),
+                              border: Border.all(
+                                color: const Color(0xFF1B7C80).withOpacity(0.3),
                               ),
                             ),
-                          ),
-
-                          const SizedBox(height: 18),
-
-                          Row(
-                            textDirection: TextDirection.rtl,
-                            children: [
-                              Expanded(
-                                child: InkWell(
-                                  onTap: () =>
-                                      _registerStatus('حاضر', effId),
-                                  child: Container(
-                                    height: 54,
-                                    decoration: BoxDecoration(
-                                      color: _status == 'حاضر'
-                                          ? Colors.green.shade700
-                                          : Colors.green,
-                                      borderRadius: BorderRadius.circular(8),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.end,
+                              children: [
+                                Row(
+                                  children: [
+                                    const Icon(
+                                      Icons.how_to_reg,
+                                      color: mainColor,
+                                      size: 24,
                                     ),
-                                    child: const Center(
-                                      child: Text(
-                                        'حاضر',
-                                        style: TextStyle(
-                                          color: Colors.white,
-                                          fontSize: 20,
-                                        ),
+                                    const SizedBox(width: 8),
+                                    const Text(
+                                      'تسجيل حضور / غياب الطالب',
+                                      style: TextStyle(
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.bold,
+                                        color: mainColor,
                                       ),
                                     ),
+                                  ],
+                                ),
+                                const SizedBox(height: 16),
+                                Text(
+                                  'الحالة الحالية: ${_status.isEmpty ? 'لم يتم التسجيل' : _status}',
+                                  style: TextStyle(
+                                    fontSize: 14,
+                                    color: _status == 'حاضر' 
+                                        ? Colors.green 
+                                        : _status == 'غائب' 
+                                            ? Colors.red 
+                                            : Colors.grey.shade700,
+                                    fontWeight: FontWeight.w600,
                                   ),
                                 ),
-                              ),
-
-                              const SizedBox(width: 12),
-
-                              Expanded(
-                                child: InkWell(
-                                  onTap: () =>
-                                      _registerStatus('غائب', effId),
-                                  child: Container(
-                                    height: 54,
-                                    decoration: BoxDecoration(
-                                      color: _status == 'غائب'
-                                          ? Colors.red.shade700
-                                          : Colors.red,
-                                      borderRadius: BorderRadius.circular(8),
-                                    ),
-                                    child: const Center(
-                                      child: Text(
-                                        'غائب',
-                                        style: TextStyle(
-                                          color: Colors.white,
-                                          fontSize: 20,
+                                const SizedBox(height: 16),
+                                Row(
+                                  textDirection: TextDirection.rtl,
+                                  children: [
+                                    Expanded(
+                                      child: InkWell(
+                                        onTap: () =>
+                                            _registerStatus('حاضر', effId),
+                                        child: Container(
+                                          height: 50,
+                                          decoration: BoxDecoration(
+                                            color: _status == 'حاضر'
+                                                ? Colors.green.shade700
+                                                : Colors.green,
+                                            borderRadius: BorderRadius.circular(8),
+                                          ),
+                                          child: const Center(
+                                            child: Text(
+                                              'حاضر',
+                                              style: TextStyle(
+                                                color: Colors.white,
+                                                fontSize: 18,
+                                                fontWeight: FontWeight.bold,
+                                              ),
+                                            ),
+                                          ),
                                         ),
                                       ),
-                                    ),
+
+                                      const SizedBox(width: 12),
+
+                                      Expanded(
+                                        child: InkWell(
+                                          onTap: () =>
+                                              _registerStatus('غائب', effId),
+                                          child: Container(
+                                            height: 50,
+                                            decoration: BoxDecoration(
+                                              color: _status == 'غائب'
+                                                  ? Colors.red.shade700
+                                                  : Colors.red,
+                                              borderRadius: BorderRadius.circular(8),
+                                            ),
+                                            child: const Center(
+                                              child: Text(
+                                                'غائب',
+                                                style: TextStyle(
+                                                  color: Colors.white,
+                                                  fontSize: 18,
+                                                  fontWeight: FontWeight.bold,
+                                                ),
+                                              ),
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                    ],
                                   ),
                                 ),
-                              ),
-                            ],
+                              ],
+                            ),
                           ),
 
                           const SizedBox(height: 24),

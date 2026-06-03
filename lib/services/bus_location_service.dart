@@ -8,12 +8,17 @@ import '../platform_utils.dart';
 
 import '../driver_session.dart';
 
-/// يرسل موقع الحافلة ومسار الرحلة إلى `bus_locations` ليظهر عند السائق وولي الأمر.
 class BusLocationService {
   static StreamSubscription<Position>? _positionSub;
   static String? _docId;
   static final List<Map<String, dynamic>> _trail = [];
   static const int _maxTrailPoints = 120;
+
+  // إضافة StreamController لبث تحديثات الموقع للواجهات الأخرى
+  static final StreamController<Position> _locationStreamController = StreamController<Position>.broadcast();
+  static Stream<Position> get locationStream => _locationStreamController.stream;
+  static Position? _currentPosition;
+  static Position? get currentPosition => _currentPosition;
 
   static String? _resolveDocId() {
     final driver = DriverSession.currentDriver;
@@ -37,7 +42,6 @@ class BusLocationService {
   }
 
   static Future<bool> start() async {
-    // Skip location features on web and Windows desktop (geolocator not supported)
     if (kIsWeb || isWindows) {
       return false;
     }
@@ -57,21 +61,47 @@ class BusLocationService {
     );
 
     try {
+      // محاولة الحصول على آخر موقع معروف أولاً لسرعة الاستجابة
+      final lastKnown = await Geolocator.getLastKnownPosition();
+      if (lastKnown != null) {
+        await _onPosition(lastKnown);
+      }
+
       final currentPosition = await Geolocator.getCurrentPosition(
-        desiredAccuracy: LocationAccuracy.best,
+        desiredAccuracy: LocationAccuracy.high,
+        timeLimit: const Duration(seconds: 10),
       );
       await _onPosition(currentPosition);
-    } catch (_) {
-      // ignore: avoid_print
-      print('BusLocationService: failed to get current position immediately.');
+    } catch (e) {
+      debugPrint('BusLocationService: فشل الحصول على الموقع الفوري: $e');
     }
 
-    _positionSub = Geolocator.getPositionStream(locationSettings: settings)
-        .listen(_onPosition, onError: (_) {});
+    _positionSub = Geolocator.getPositionStream(
+      locationSettings: kIsWeb || isWindows 
+        ? const LocationSettings(accuracy: LocationAccuracy.high, distanceFilter: 5)
+        : defaultTargetPlatform == TargetPlatform.android
+          ? AndroidSettings(
+              accuracy: LocationAccuracy.high,
+              distanceFilter: 5,
+              forceLocationManager: true,
+              intervalDuration: const Duration(seconds: 5),
+            )
+          : AppleSettings(
+              accuracy: LocationAccuracy.high,
+              distanceFilter: 5,
+              pauseLocationUpdatesAutomatically: false,
+              showBackgroundLocationIndicator: true,
+            ),
+    ).listen(_onPosition, onError: (e) {
+      debugPrint('BusLocationService: خطأ في تدفق الموقع: $e');
+    });
     return true;
   }
 
   static Future<void> _onPosition(Position pos) async {
+    _currentPosition = pos;
+    _locationStreamController.add(pos);
+    
     final id = _docId;
     if (id == null) return;
 

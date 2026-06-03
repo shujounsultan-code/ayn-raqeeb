@@ -11,6 +11,7 @@ import 'package:geolocator/geolocator.dart';
 import 'driver_session.dart';
 import 'driver_trip_notifier.dart';
 import 'services/geocoding_service.dart';
+import 'services/bus_location_service.dart';
 import 'platform_utils.dart';
 import 'dart:math' as math;
 
@@ -39,7 +40,7 @@ class _DashboardPageState extends State<DashboardPage> {
   List<Map<String, dynamic>> students = [];
   LatLng? busLocation;
   LatLng? schoolLocation; // موقع المدرسة (ديناميكي بناءً على موقع السائق)
-  Stream<Position>? _positionStream;
+  StreamSubscription<Position>? _locationSubscription;
   double? busAccuracy;
   bool isLoading = true;
   String? errorMessage;
@@ -50,207 +51,134 @@ class _DashboardPageState extends State<DashboardPage> {
   bool _postalLoading = false;
   String? _highlightStudentId;
   String? _selectedStudentId; // الطالب المختار لعرض موقعه فقط
-  final List<Map<String, dynamic>> _trail = [];
-  static const int _maxTrailPoints = 120;
-
-  Future<void> _sendBusLocationToFirestore(Position position) async {
-    final driver = DriverSession.currentDriver;
-    if (driver == null) return;
-
-    final schoolId = driver['school_id']?.toString().trim() ?? '';
-    final busNumber = driver['bus_number']?.toString().trim() ?? '';
-
-    if (schoolId.isEmpty || busNumber.isEmpty) {
-      debugPrint('Dashboard: لا يوجد معرف المدرسة أو رقم الحافلة');
-      return;
-    }
-
-    final busDocId = '${schoolId}_$busNumber';
-
-    // إضافة النقطة الحالية للمسار
-    _trail.add({
-      'lat': position.latitude,
-      'lng': position.longitude,
-      't': DateTime.now().millisecondsSinceEpoch,
-    });
-
-    // الحفاظ على آخر 120 نقطة فقط
-    if (_trail.length > _maxTrailPoints) {
-      _trail.removeRange(0, _trail.length - _maxTrailPoints);
-    }
-
-    // إرسال الإحداثيات إلى السيرفر المحلي (FastAPI)
-    _sendToLocalBackend(position.latitude, position.longitude);
-
-    // إرسال الموقع إلى Firestore
-    try {
-      await FirebaseFirestore.instance.collection('bus_locations').doc(busDocId).set({
-        'lat': position.latitude,
-        'lng': position.longitude,
-        'accuracy': position.accuracy,
-        'school_id': schoolId,
-        'bus_number': busNumber,
-        'trail': List<Map<String, dynamic>>.from(_trail),
-        'updated_at': FieldValue.serverTimestamp(),
-      }, SetOptions(merge: true));
-      debugPrint('Dashboard: تم إرسال الموقع إلى Firestore');
-    } catch (e) {
-      debugPrint('Dashboard: خطأ في إرسال الموقع إلى Firestore: $e');
-    }
-  }
-
-  Future<void> _sendToLocalBackend(double lat, double lng) async {
-    try {
-      final url = Uri.parse('http://127.0.0.1:8000/documents/manual-qa');
-      final response = await http.post(
-        url,
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({
-          'latitude': lat,
-          'longitude': lng,
-          'timestamp': DateTime.now().toIso8601String(),
-        }),
-      );
-      if (response.statusCode == 200 || response.statusCode == 201) {
-        debugPrint('Dashboard: تم إرسال الموقع بنجاح للسيرفر المحلي');
-      } else {
-        debugPrint('Dashboard: فشل إرسال الموقع للسيرفر المحلي: ${response.statusCode}');
-      }
-    } catch (e) {
-      debugPrint('Dashboard: خطأ في الاتصال بالسيرفر المحلي: $e');
-    }
-  }
+  
+  // تتبع الطلاب الذين تم مسحهم في هذه الجلسة لتخطي موقعه والذهاب للتالي
+  final Set<String> _handledStudentIds = {};
 
   @override
   void initState() {
     super.initState();
     driverData = DriverSession.currentDriver;
-    // BusLocationService.start(); // تعطيل مؤقت لحل مشكلة الإذن
     DriverTripNotifier.lastScannedStudentId.addListener(_onStudentScanned);
     fetchData();
 
-    // طلب إذن الموقع وتشغيل التتبع
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _initLocationStream();
-    });
+    // الاستماع لموقع الحافلة من الخدمة المستمرة
+    _initLocationListener();
   }
 
-  Future<void> _initLocationStream() async {
-    debugPrint('=== بدء _initLocationStream ===');
-    debugPrint('المنصة الحالية: ${kIsWeb ? "Web" : isWindows ? "Windows" : "Mobile"}');
+  void _initLocationListener() {
+    // محاولة جلب الموقع فوراً عند فتح الواجهة لضمان سرعة الاستجابة
+    _getCurrentLocationImmediately();
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('جاري تهيئة خدمة الموقع...')),
-    );
+    // جلب الموقع الحالي من الخدمة إذا كان متوفراً مسبقاً
+    final currentPos = BusLocationService.currentPosition;
+    if (currentPos != null && mounted) {
+      setState(() {
+        busLocation = LatLng(currentPos.latitude, currentPos.longitude);
+        busAccuracy = currentPos.accuracy;
+      });
+      _moveMapToBus();
+    }
 
-    try {
-      // فحص خدمة الموقع (متاح فقط على الموبايل)
-      bool serviceEnabled = true;
-      if (!kIsWeb && !isWindows) {
-        serviceEnabled = await Geolocator.isLocationServiceEnabled();
-        debugPrint('خدمة الموقع مفعلة: $serviceEnabled');
-      }
+    // الاشتراك في التحديثات المستمرة لضمان التحديث اللحظي
+    _locationSubscription = BusLocationService.locationStream.listen((position) {
+      if (!mounted) return;
+      setState(() {
+        busLocation = LatLng(position.latitude, position.longitude);
+        busAccuracy = position.accuracy;
+      });
+      _moveMapToBus();
+    });
 
-      if (!serviceEnabled) {
-        debugPrint('خدمة الموقع غير مفعلة');
-        _showLocationServiceDialog();
-        return;
-      }
-
-      // فحص وطلب الإذن (متاح فقط على الموبايل)
-      LocationPermission permission = LocationPermission.always;
-      if (!kIsWeb && !isWindows) {
-        permission = await Geolocator.checkPermission();
-        debugPrint('إذن الموقع الحالي: $permission');
-
-        // طلب الإذن دائماً إذا لم يكن ممنوحاً
-        if (permission == LocationPermission.denied || permission == LocationPermission.deniedForever) {
-          debugPrint('طلب إذن الموقع...');
-          permission = await Geolocator.requestPermission();
-          debugPrint('إذن الموقع بعد الطلب: $permission');
-        }
-
-        if (permission == LocationPermission.deniedForever) {
-          debugPrint('تم رفض الإذن نهائياً');
-          _showPermissionForeverDeniedDialog();
-          return;
-        }
-
-        if (permission == LocationPermission.denied) {
-          debugPrint('تم رفض الإذن');
+    // التأكد من تشغيل الخدمة الشاملة
+    if (!kIsWeb && !isWindows) {
+      BusLocationService.start().then((ok) {
+        if (!ok && mounted) {
           _showPermissionDeniedDialog();
-          return;
         }
-      }
+      });
+    }
+  }
 
-      debugPrint('تم منح إذن الموقع، جاري تحديد الموقع...');
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('جاري تحديد الموقع...')),
+  // دالة لجلب الموقع بشكل فوري ومستقل
+  Future<void> _getCurrentLocationImmediately() async {
+    try {
+      final position = await Geolocator.getCurrentPosition(
+        desiredAccuracy: LocationAccuracy.high,
+        timeLimit: const Duration(seconds: 5),
       );
-
-      // الحصول على الموقع الحالي
-      try {
-        debugPrint('جاري الحصول على الموقع الحالي...');
-        final currentPosition = await Geolocator.getCurrentPosition(
-          desiredAccuracy: LocationAccuracy.high,
-        );
-        debugPrint('تم الحصول على الموقع: ${currentPosition.latitude}, ${currentPosition.longitude}');
-
+      if (mounted) {
         setState(() {
-          busLocation = LatLng(currentPosition.latitude, currentPosition.longitude);
-          schoolLocation = LatLng(currentPosition.latitude, currentPosition.longitude);
-          debugPrint('تم تعيين busLocation: $busLocation');
+          busLocation = LatLng(position.latitude, position.longitude);
+          busAccuracy = position.accuracy;
         });
-
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('تم تحديد موقع الحافلة: ${currentPosition.latitude.toStringAsFixed(4)}, ${currentPosition.longitude.toStringAsFixed(4)}')),
-        );
-
-        // إرسال الموقع الأولي إلى Firestore
-        _sendBusLocationToFirestore(currentPosition);
-
-        // بدء تتبع الموقع
-        _positionStream = Geolocator.getPositionStream(
-          locationSettings: const LocationSettings(
-            accuracy: LocationAccuracy.best,
-            distanceFilter: 5,
-          ),
-        );
-        _positionStream!.listen((Position position) {
-          debugPrint('موقع الباص الجديد: ${position.latitude}, ${position.longitude}');
-          if (!mounted) return;
-          setState(() {
-            busLocation = LatLng(position.latitude, position.longitude);
-            busAccuracy = position.accuracy;
-          });
-          // تحديث الخريطة لموقع الباص الجديد
-          _mapController.move(LatLng(position.latitude, position.longitude), 15);
-          // إرسال الموقع إلى Firestore ليتتبعه ولي الأمر
-          _sendBusLocationToFirestore(position);
-        });
-      } catch (e) {
-        debugPrint('خطأ في الحصول على الموقع: $e');
-        // استخدام موقع افتراضي في حالة الفشل
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('الموقع غير متوفر على هذا الجهاز. سيتم استخدام موقع افتراضي (الرياض).')),
-        );
-        setState(() {
-          busLocation = const LatLng(24.7136, 46.6753); // الرياض
-          schoolLocation = const LatLng(24.7136, 46.6753);
-        });
+        _moveMapToBus();
       }
     } catch (e) {
-      debugPrint('خطأ عام في تهيئة الموقع: $e');
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('خطأ في تهيئة الموقع: $e')),
+      debugPrint('Dashboard: فشل جلب الموقع الفوري، الاعتماد على الخدمة المستمرة.');
+    }
+  }
+
+  // دالة آمنة لتحريك الخريطة
+  void _moveMapToBus() {
+    if (busLocation != null && mounted) {
+      try {
+        _mapController.move(busLocation!, 15);
+      } catch (e) {
+        // الخريطة قد لا تكون جاهزة بعد، نتجاهل الخطأ
+      }
+    }
+  }
+
+  String? _lastFocusedStudentId;
+
+  void _focusOnNearestStudent() {
+    if (students.isEmpty || busLocation == null) return;
+
+    // تصفية الطلاب الذين لم يتم التعامل معهم ولهم موقع
+    final pendingStudents = students.where((s) {
+      return !_handledStudentIds.contains(s['id']) && s['lat'] is num && s['lng'] is num;
+    }).toList();
+
+    if (pendingStudents.isEmpty) return;
+
+    // البحث عن الأقرب
+    pendingStudents.sort((a, b) {
+      final d1 = const Distance().as(
+        LengthUnit.Meter,
+        busLocation!,
+        LatLng((a['lat'] as num).toDouble(), (a['lng'] as num).toDouble()),
+      );
+      final d2 = const Distance().as(
+        LengthUnit.Meter,
+        busLocation!,
+        LatLng((b['lat'] as num).toDouble(), (b['lng'] as num).toDouble()),
+      );
+      return d1.compareTo(d2);
+    });
+
+    final nearest = pendingStudents.first;
+    
+    // التحديث فقط إذا تغير الطالب الأقرب لضمان عدم اهتزاز الخريطة
+    if (_lastFocusedStudentId != nearest['id']) {
+      _lastFocusedStudentId = nearest['id'];
+      _mapController.move(
+        LatLng((nearest['lat'] as num).toDouble(), (nearest['lng'] as num).toDouble()),
+        15,
       );
     }
-    
-    debugPrint('=== انتهى _initLocationStream ===');
   }
 
   void _onStudentScanned() {
-    _highlightStudentId = DriverTripNotifier.lastScannedStudentId.value;
+    final scannedId = DriverTripNotifier.lastScannedStudentId.value;
+    if (scannedId != null) {
+      setState(() {
+        _handledStudentIds.add(scannedId);
+        _highlightStudentId = scannedId;
+      });
+      // بعد المسح، ننتقل تلقائياً للطالب التالي الأقرب
+      _focusOnNearestStudent();
+    }
     fetchData();
   }
 
@@ -289,7 +217,7 @@ class _DashboardPageState extends State<DashboardPage> {
           TextButton(
             onPressed: () async {
               Navigator.of(ctx).pop();
-              _initLocationStream();
+              await BusLocationService.start();
             },
             child: const Text('إعادة المحاولة'),
           ),
@@ -325,6 +253,8 @@ class _DashboardPageState extends State<DashboardPage> {
   @override
   void dispose() {
     DriverTripNotifier.lastScannedStudentId.removeListener(_onStudentScanned);
+    _locationSubscription?.cancel();
+    _studentsSubscription?.cancel();
     _postalController.dispose();
     super.dispose();
   }
@@ -517,10 +447,10 @@ class _DashboardPageState extends State<DashboardPage> {
       _selectedStudentId = null;
     }
     
-    // إذا تم اختيار طالب، عرضه فقط
+    // إذا تم اختيار طالب، عرضه فقط، وإلا عرض الطلاب الذين لم يتم التعامل معهم
     final displayStudents = _selectedStudentId != null
         ? studentsWithLocation.where((s) => s['id'] == _selectedStudentId).toList()
-        : studentsWithLocation;
+        : studentsWithLocation.where((s) => !_handledStudentIds.contains(s['id'])).toList();
     return Directionality(
       textDirection: TextDirection.rtl,
       child: Scaffold(
@@ -599,7 +529,7 @@ class _DashboardPageState extends State<DashboardPage> {
                         child: FlutterMap(
                           mapController: _mapController,
                           options: MapOptions(
-                            initialCenter: busLocation ?? schoolLocation ?? const LatLng(24.7136, 46.6753), // موقع افتراضي (الرياض)
+                            initialCenter: busLocation ?? schoolLocation ?? const LatLng(24.7136, 46.6753),
                             initialZoom: 15,
                             interactionOptions: const InteractionOptions(enableScrollWheel: false, enableMultiFingerGestureRace: false),
                           ),
@@ -607,29 +537,24 @@ class _DashboardPageState extends State<DashboardPage> {
                             TileLayer(
                               urlTemplate: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
                               subdomains: const ['a', 'b', 'c'],
-                              userAgentPackageName: 'com.example.ayn_raqeeb_app',
+                              userAgentPackageName: 'com.appaynraqeeb.ayn_raqeeb',
                             ),
-                            // Polyline route: من الحافلة إلى كل طالب بالترتيب (متقطع)
-                            if (displayStudents.isNotEmpty && busLocation != null)
+                            // عرض المسارات من الباص إلى جميع الطلاب المتبقين
+                            if (busLocation != null && displayStudents.isNotEmpty)
                               PolylineLayer(
-                                polylines: [
-                                  Polyline(
+                                polylines: displayStudents
+                                    .where((s) => s['lat'] is num && s['lng'] is num)
+                                    .map((s) {
+                                  return Polyline(
                                     points: [
                                       busLocation!,
-                                      ...displayStudents.map(
-                                        (s) => LatLng(
-                                          (s['lat'] as num).toDouble(),
-                                          (s['lng'] as num).toDouble(),
-                                        ),
-                                      )
+                                      LatLng((s['lat'] as num).toDouble(), (s['lng'] as num).toDouble()),
                                     ],
-                                    color: const Color(0xFF1B7C80),
-                                    strokeWidth: 4,
+                                    strokeWidth: 2.0,
+                                    color: const Color(0xFF1B7C80).withOpacity(0.4),
                                     isDotted: true,
-                                    borderColor: Colors.white,
-                                    borderStrokeWidth: 0.5,
-                                  ),
-                                ],
+                                  );
+                                }).toList(),
                               ),
                             // دائرة دقة GPS حول الحافلة (CircleLayer)
                             if (busLocation != null && busAccuracy != null)
@@ -647,51 +572,66 @@ class _DashboardPageState extends State<DashboardPage> {
                             // Markers: المدرسة، الحافلة، الطالبات
                             MarkerLayer(
                               markers: [
-                                // Marker المدرسة
-                                if (schoolLocation != null)
-                                  Marker(
-                                    width: 32,
-                                    height: 32,
-                                    point: schoolLocation!,
-                                  child: GestureDetector(
-                                    onTap: () => _showPopup(context, '🏫 المدرسة'),
-                                    child: Container(
-                                      decoration: BoxDecoration(
-                                        color: const Color(0xFF1B7C80),
-                                        shape: BoxShape.circle,
-                                        boxShadow: [
-                                          BoxShadow(
-                                            color: const Color(0xFF1B7C80).withOpacity(0.3),
-                                            blurRadius: 8,
-                                            spreadRadius: 2,
-                                          ),
-                                        ],
-                                      ),
-                                      child: const Center(child: Text('🏫', style: TextStyle(fontSize: 18, color: Colors.white))),
-                                    ),
-                                  ),
-                                ),
-                                // Marker الحافلة
+                                // Marker الحافلة (يظهر دائماً)
                                 Marker(
-                                  width: 36,
-                                  height: 36,
+                                  width: 50,
+                                  height: 50,
                                   point: busLocation ?? schoolLocation ?? const LatLng(24.7136, 46.6753),
-                                    child: GestureDetector(
+                                  child: GestureDetector(
                                     onTap: () {
                                       final busNumber = driverData != null ? (driverData!['bus_number']?.toString() ?? '') : '';
-                                      final locationStatus = busLocation != null ? 'محدد' : 'غير محدد';
-                                      _showPopup(context, '🚌 رقم الحافلة: $busNumber\nالموقع: $locationStatus');
+                                      final status = busLocation != null ? 'محدد بدقة' : 'جاري تحديد الموقع...';
+                                      _showPopup(context, '🚌 باص رقم: $busNumber\nالحالة: $status');
                                     },
                                     child: Container(
                                       decoration: BoxDecoration(
-                                        color: busLocation != null ? Colors.transparent : Colors.orange.withOpacity(0.3),
+                                        color: busLocation != null ? const Color(0xFF1B7C80) : Colors.orange,
                                         shape: BoxShape.circle,
-                                        border: busLocation != null ? null : Border.all(color: Colors.orange, width: 2),
+                                        border: Border.all(color: Colors.white, width: 2.5),
+                                        boxShadow: [
+                                          BoxShadow(
+                                            color: Colors.black.withOpacity(0.3),
+                                            blurRadius: 10,
+                                            offset: const Offset(0, 3),
+                                          ),
+                                        ],
                                       ),
-                                      child: const Text('🚌', style: TextStyle(fontSize: 32)),
+                                      child: Stack(
+                                        alignment: Alignment.center,
+                                        children: [
+                                          const Icon(Icons.directions_bus, color: Colors.white, size: 28),
+                                          if (busLocation == null)
+                                            const SizedBox(
+                                              width: 45,
+                                              height: 45,
+                                              child: CircularProgressIndicator(
+                                                strokeWidth: 2,
+                                                valueColor: AlwaysStoppedAnimation<Color>(Colors.white70),
+                                              ),
+                                            ),
+                                        ],
+                                      ),
                                     ),
                                   ),
                                 ),
+                                // Marker المدرسة (يظهر كمرجع)
+                                if (schoolLocation != null)
+                                  Marker(
+                                    width: 35,
+                                    height: 35,
+                                    point: schoolLocation!,
+                                    child: GestureDetector(
+                                      onTap: () => _showPopup(context, '🏫 موقع المدرسة'),
+                                      child: Container(
+                                        decoration: BoxDecoration(
+                                          color: Colors.red.shade600,
+                                          shape: BoxShape.circle,
+                                          border: Border.all(color: Colors.white, width: 2),
+                                        ),
+                                        child: const Icon(Icons.school, color: Colors.white, size: 20),
+                                      ),
+                                    ),
+                                  ),
                                 // موقع الرمز البريدي المُدخل
                                 if (_postalPreview != null)
                                   Marker(
@@ -817,7 +757,7 @@ class _DashboardPageState extends State<DashboardPage> {
                       children: [
                         _routeStat('⏱️', 'الوقت المتبقي', _estimateTime()),
                         _routeStat('📏', 'المسافة', _estimateDistance()),
-                        _routeStat('👧', 'على الباص', students.length.toString()),
+                        _routeStat('👧', 'المتبقي', (students.length - _handledStudentIds.length).toString()),
                       ],
                     ),
                   ),
@@ -857,20 +797,28 @@ class _DashboardPageState extends State<DashboardPage> {
                                     ),
                                     Expanded(
                                       child: Padding(
-                                        padding: const EdgeInsets.symmetric(horizontal: 8.0),
+                                        padding: const EdgeInsets.only(right: 12),
                                         child: Column(
                                           crossAxisAlignment: CrossAxisAlignment.end,
                                           children: [
-                                            Text(
-                                              'الاسم : ${s['name']}',
-                                              style: TextStyle(
-                                                fontWeight: FontWeight.bold,
-                                                fontSize: 16,
-                                                color: s['id'] == _highlightStudentId
-                                                    ? const Color(0xFF16A34A)
-                                                    : Colors.black,
-                                              ),
-                                              textAlign: TextAlign.right,
+                                            Row(
+                                              mainAxisAlignment: MainAxisAlignment.end,
+                                              children: [
+                                                if (_handledStudentIds.contains(s['id']))
+                                                  const Icon(Icons.check_circle, color: Colors.green, size: 20),
+                                                const SizedBox(width: 8),
+                                                Text(
+                                                  'الاسم : ${s['name']}',
+                                                  style: TextStyle(
+                                                    fontWeight: FontWeight.bold,
+                                                    fontSize: 16,
+                                                    color: s['id'] == _highlightStudentId
+                                                        ? const Color(0xFF16A34A)
+                                                        : Colors.black,
+                                                  ),
+                                                  textAlign: TextAlign.right,
+                                                ),
+                                              ],
                                             ),
                                             if (s['lat'] is! num || s['lng'] is! num)
                                               Text(
@@ -882,6 +830,27 @@ class _DashboardPageState extends State<DashboardPage> {
                                                   color: Colors.orange.shade800,
                                                 ),
                                                 textAlign: TextAlign.right,
+                                              ),
+                                            if (!_handledStudentIds.contains(s['id']) && s['lat'] is num)
+                                              Padding(
+                                                padding: const EdgeInsets.only(top: 4),
+                                                child: TextButton(
+                                                  onPressed: () {
+                                                    setState(() {
+                                                      _handledStudentIds.add(s['id']);
+                                                    });
+                                                    _focusOnNearestStudent();
+                                                  },
+                                                  style: TextButton.styleFrom(
+                                                    padding: EdgeInsets.zero,
+                                                    minimumSize: const Size(0, 0),
+                                                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                                  ),
+                                                  child: const Text(
+                                                    'تم التوصيل / الركوب',
+                                                    style: TextStyle(color: Color(0xFF1B7C80), fontSize: 13, fontWeight: FontWeight.bold),
+                                                  ),
+                                                ),
                                               ),
                                           ],
                                         ),

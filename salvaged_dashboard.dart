@@ -226,7 +226,7 @@ class _DashboardPageState extends State<DashboardPage> {
                             TileLayer(
                               urlTemplate: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
                               subdomains: const ['a', 'b', 'c'],
-                              userAgentPackageName: 'com.example.ayn_raqeeb_app',
+                              userAgentPackageName: 'com.appaynraqeeb.ayn_raqeeb',
                             ),
                             // Polyline route: من المدرسة إلى كل طالبة بالترتيب (متقطع)
                             if (studentsWithLocation.isNotEmpty)

@@ -76,7 +76,11 @@ class _DriverLoginScreenState extends State<DriverLoginScreen> {
       body: Stack(
         children: [
           // زر الرجوع في الأعلى
-          BackButtonWidget(),
+          const Positioned(
+            top: 40,
+            left: 20,
+            child: BackButtonWidget(),
+          ),
           SafeArea(
             child: Center(
               child: Padding(
@@ -162,14 +166,6 @@ class _DriverLoginScreenState extends State<DriverLoginScreen> {
                                     color: Colors.white,
                                   ),
                                 ),
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                      const Text(
-                        'ليس لديك حساب؟ سجل الآن',
-                        style: TextStyle(
-                          fontSize: 14,
-                          color: Colors.black54,
                         ),
                       ),
                     ],

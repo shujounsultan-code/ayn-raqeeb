@@ -144,6 +144,180 @@ class _StudentsScreenState extends State<StudentsScreen> {
     }
   }
 
+  void _editStudentDialog(Map<String, dynamic> student) {
+    final nameController = TextEditingController(text: student['name']);
+    final postalController = TextEditingController(text: student['postal_code'] ?? '');
+    String? selectedGradeKey = student['grade_key']?.toString();
+    String? selectedBusId = student['bus_firestore_id']?.toString();
+    final scaffoldMessenger = ScaffoldMessenger.of(context);
+    final String studentDocId = student['id'];
+
+    Future<void> updateStudentFirestore(BuildContext dialogContext) async {
+      final name = nameController.text.trim();
+      final postalCode = postalController.text.trim();
+      final gradeKey = selectedGradeKey;
+      final busDocumentId = selectedBusId;
+
+      if (name.isEmpty ||
+          gradeKey == null ||
+          !gradeNames.containsKey(gradeKey) ||
+          busDocumentId == null ||
+          busDocumentId.isEmpty) {
+        return;
+      }
+
+      final studentRef = FirebaseFirestore.instance.collection('students').doc(studentDocId);
+      final oldBusId = student['bus_firestore_id']?.toString();
+      final scaffoldMessenger = ScaffoldMessenger.of(context);
+
+      try {
+        // 1. جلب الموقع الجغرافي أولاً (خارج أي عملية قاعدة بيانات)
+        double? newLat;
+        double? newLng;
+        if (postalCode.isNotEmpty && postalCode != student['postal_code']) {
+          final point = await GeocodingService.postalCodeToLatLng(postalCode);
+          if (point != null) {
+            newLat = point.latitude;
+            newLng = point.longitude;
+          }
+        }
+
+        // 2. تحديث المقاعد إذا تغير الباص (استخدام increment لتجنب الترانزاكشن)
+        if (oldBusId != null && oldBusId.isNotEmpty && oldBusId != busDocumentId) {
+          // إعادة مقعد للباص القديم
+          await FirebaseFirestore.instance.collection('buses').doc(oldBusId).update({
+            'available_seats': FieldValue.increment(1),
+          });
+          
+          // سحب مقعد من الباص الجديد
+          final newBusRef = FirebaseFirestore.instance.collection('buses').doc(busDocumentId);
+          final newBusSnap = await newBusRef.get();
+          if (newBusSnap.exists) {
+            final busData = newBusSnap.data()!;
+            final busNumber = busData['bus_number']?.toString() ?? '';
+            
+            await newBusRef.update({
+              'available_seats': FieldValue.increment(-1),
+            });
+            
+            // تحديث رقم الباص في سجل الطالب
+            await studentRef.update({
+              'bus': busNumber,
+              'bus_firestore_id': busDocumentId,
+            });
+          }
+        }
+
+        // 3. تحديث بيانات الطالب النهائية
+        final feesGrade = gradeKeyToFeesLabel[gradeKey];
+        final Map<String, dynamic> updateData = {
+          'name': name,
+          'grade': feesGrade ?? gradeNames[gradeKey],
+          'grade_key': gradeKey,
+          'postal_code': postalCode,
+        };
+        
+        if (newLat != null && newLng != null) {
+          updateData['home_lat'] = newLat;
+          updateData['home_lng'] = newLng;
+        }
+
+        await studentRef.update(updateData);
+
+        if (!dialogContext.mounted) return;
+        Navigator.pop(dialogContext);
+        scaffoldMessenger.showSnackBar(
+          const SnackBar(content: Text('تم تحديث بيانات الطالب بنجاح')),
+        );
+      } catch (e) {
+        debugPrint('Update Error: $e');
+        scaffoldMessenger.showSnackBar(
+          SnackBar(content: Text('فشل التحديث: $e')),
+        );
+      }
+    }
+
+    showDialog(
+      context: context,
+      builder: (ctx) => Directionality(
+        textDirection: TextDirection.rtl,
+        child: StatefulBuilder(
+          builder: (context, setStateDialog) {
+            return AlertDialog(
+              title: const Text('تعديل بيانات الطالب'),
+              content: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    TextField(
+                      controller: nameController,
+                      decoration: const InputDecoration(labelText: 'اسم الطالب'),
+                    ),
+                    const SizedBox(height: 8),
+                    TextField(
+                      controller: postalController,
+                      keyboardType: TextInputType.number,
+                      decoration: const InputDecoration(
+                        labelText: 'الرمز البريدي',
+                        hintText: 'مثال: 21577',
+                      ),
+                    ),
+                    DropdownButtonFormField<String>(
+                      value: selectedGradeKey,
+                      items: gradeNames.entries
+                          .map((entry) => DropdownMenuItem(
+                                value: entry.key,
+                                child: Text('الصف ${entry.value}'),
+                              ))
+                          .toList(),
+                      onChanged: (val) => setStateDialog(() => selectedGradeKey = val),
+                      decoration: const InputDecoration(labelText: 'الصف'),
+                    ),
+                    StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+                      stream: FirebaseFirestore.instance
+                          .collection('buses')
+                          .where('school_id', isEqualTo: widget.schoolId)
+                          .snapshots(),
+                      builder: (context, snapshot) {
+                        if (!snapshot.hasData) return const CircularProgressIndicator();
+                        final allBuses = _allBusesSorted(snapshot.data!.docs);
+                        return DropdownButtonFormField<String>(
+                          value: selectedBusId,
+                          items: allBuses.map((bus) {
+                            final seats = _availableSeatsFromBusData(bus['available_seats']);
+                            final isCurrentBus = bus['id'] == student['bus_firestore_id'];
+                            return DropdownMenuItem<String>(
+                              value: bus['id'] as String,
+                              enabled: seats > 0 || isCurrentBus,
+                              child: Text('باص رقم ${bus['bus_number']} ${isCurrentBus ? '(الحالي)' : '— متاح: $seats'}'),
+                            );
+                          }).toList(),
+                          onChanged: (val) => setStateDialog(() => selectedBusId = val),
+                          decoration: const InputDecoration(labelText: 'الباص'),
+                        );
+                      },
+                    ),
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx),
+                  child: const Text('إلغاء'),
+                ),
+                ElevatedButton(
+                  style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF1B7C80)),
+                  onPressed: () => updateStudentFirestore(context),
+                  child: const Text('حفظ التعديلات', style: TextStyle(color: Colors.white)),
+                ),
+              ],
+            );
+          },
+        ),
+      ),
+    );
+  }
+
   Map<String, List<Map<String, dynamic>>> _groupStudentsByGrade(
     List<QueryDocumentSnapshot<Map<String, dynamic>>> docs,
   ) {
@@ -171,6 +345,8 @@ class _StudentsScreenState extends State<StudentsScreen> {
         'display_id': data['display_id'],
         'parent_id': data['parent_id'] ?? '',
         'school_id': data['school_id'] ?? widget.schoolId,
+        'postal_code': data['postal_code'] ?? '',
+        'bus_firestore_id': data['bus_firestore_id'] ?? '',
       };
       final bucket = _bucketKeyFromStudentData(data);
       out[bucket]?.add(map);
@@ -199,115 +375,80 @@ class _StudentsScreenState extends State<StudentsScreen> {
         return;
       }
 
-      final busRef = FirebaseFirestore.instance
-          .collection('buses')
-          .doc(busDocumentId);
-      final studentRef =
-          FirebaseFirestore.instance.collection('students').doc();
-      final schoolRef = FirebaseFirestore.instance
-          .collection('schools')
-          .doc(widget.schoolId);
-
-      final feesGrade = gradeKeyToFeesLabel[gradeKey];
-      String? savedDisplayId;
+      final busRef = FirebaseFirestore.instance.collection('buses').doc(busDocumentId);
+      final studentRef = FirebaseFirestore.instance.collection('students').doc();
+      final schoolRef = FirebaseFirestore.instance.collection('schools').doc(widget.schoolId);
+      final scaffoldMessenger = ScaffoldMessenger.of(context);
 
       try {
-        await FirebaseFirestore.instance.runTransaction((transaction) async {
-          final snap = await transaction.get(busRef);
-          if (!snap.exists) return;
-          final data = snap.data();
-          if (data == null) return;
-
-          final seats =
-              _availableSeatsFromBusData(data['available_seats']);
-          if (seats <= 0) return;
-
-            final busNumberStr = data['bus_number']?.toString() ?? '';
-            if (busNumberStr.isEmpty) return;
-
-          final schoolSnap = await transaction.get(schoolRef);
-          var seq = 0;
-          if (schoolSnap.exists && schoolSnap.data() != null) {
-            seq = (schoolSnap.data()!['student_display_seq'] as num?)
-                    ?.toInt() ??
-                0;
+        // 1. جلب الموقع الجغرافي أولاً خارج أي عملية قاعدة بيانات
+        double? homeLat;
+        double? homeLng;
+        if (postalCode.isNotEmpty) {
+          final point = await GeocodingService.postalCodeToLatLng(postalCode);
+          if (point != null) {
+            homeLat = point.latitude;
+            homeLng = point.longitude;
           }
-          final nextSeq = seq + 1;
-          final displayId = 'D${nextSeq.toString().padLeft(5, '0')}';
-          savedDisplayId = displayId;
-
-          transaction.update(busRef, {'available_seats': seats - 1});
-          transaction.set(studentRef, {
-            'name': name,
-            'grade': feesGrade ?? gradeNames[gradeKey],
-            'grade_key': gradeKey,
-            'bus': busNumberStr, // حفظ رقم الباص كسلسلة نصية
-            'school_id': widget.schoolId,
-            'student_id': displayId,
-            'display_id': displayId,
-            'bus_firestore_id': busDocumentId,
-            'parent_id': '',
-            'status': 'active',
-            if (postalCode.isNotEmpty) 'postal_code': postalCode,
-            'created_at': FieldValue.serverTimestamp(),
-          });
-          transaction.set(
-            schoolRef,
-            {'student_display_seq': nextSeq},
-            SetOptions(merge: true),
-          );
-        });
-      } catch (_) {
-        if (!mounted) return;
-        scaffoldMessenger.showSnackBar(
-          const SnackBar(
-            content: Text('تعذر حفظ الطالب أو حجز المقعد.'),
-          ),
-        );
-        return;
-      }
-
-      final created = await studentRef.get();
-      if (!created.exists || created.data() == null) {
-        if (!mounted) return;
-        scaffoldMessenger.showSnackBar(
-          const SnackBar(
-            content: Text(
-              'لا توجد مقاعد متاحة في هذا الباص حالياً.',
-            ),
-          ),
-        );
-        return;
-      }
-
-      if (postalCode.isNotEmpty) {
-        final point = await GeocodingService.postalCodeToLatLng(postalCode);
-        if (point != null) {
-          await studentRef.update({
-            'home_lat': point.latitude,
-            'home_lng': point.longitude,
-          });
         }
-      }
 
-      if (!dialogContext.mounted) return;
-      Navigator.pop(dialogContext);
-      if (!mounted) return;
-      final fromDoc = (created.data()!['student_id'] ??
-              created.data()!['display_id'])
-          ?.toString()
-          .trim();
-      final sid = (savedDisplayId?.isNotEmpty == true)
-          ? savedDisplayId
-          : (fromDoc?.isNotEmpty == true ? fromDoc : null);
-      final idMsg =
-          (sid != null && sid.isNotEmpty) ? ' المعرف: $sid' : '';
-      scaffoldMessenger.showSnackBar(
-        SnackBar(
-          content: Text('تم حفظ الطالب بنجاح$idMsg'),
-          duration: const Duration(seconds: 5),
-        ),
-      );
+        // 2. جلب بيانات الباص والمدرسة بشكل مباشر
+        final busSnap = await busRef.get();
+        if (!busSnap.exists) throw Exception('الباص غير موجود');
+        final busData = busSnap.data()!;
+        final seats = _availableSeatsFromBusData(busData['available_seats']);
+        if (seats <= 0) throw Exception('لا توجد مقاعد متاحة');
+        final busNumberStr = busData['bus_number']?.toString() ?? '';
+
+        final schoolSnap = await schoolRef.get();
+        int seq = 0;
+        if (schoolSnap.exists && schoolSnap.data() != null) {
+          seq = (schoolSnap.data()!['student_display_seq'] as num?)?.toInt() ?? 0;
+        }
+        final nextSeq = seq + 1;
+        final displayId = 'D${nextSeq.toString().padLeft(5, '0')}';
+
+        // 3. تنفيذ التحديثات المتتالية (بدون ترانزاكشن)
+        await busRef.update({'available_seats': FieldValue.increment(-1)});
+        await schoolRef.update({'student_display_seq': nextSeq});
+
+        final feesGrade = gradeKeyToFeesLabel[gradeKey];
+        final Map<String, dynamic> studentData = {
+          'name': name,
+          'grade': feesGrade ?? gradeNames[gradeKey],
+          'grade_key': gradeKey,
+          'bus': busNumberStr,
+          'school_id': widget.schoolId,
+          'student_id': displayId,
+          'display_id': displayId,
+          'bus_firestore_id': busDocumentId,
+          'parent_id': '',
+          'status': 'active',
+          'created_at': FieldValue.serverTimestamp(),
+        };
+
+        if (postalCode.isNotEmpty) {
+          studentData['postal_code'] = postalCode;
+        }
+        if (homeLat != null && homeLng != null) {
+          studentData['home_lat'] = homeLat;
+          studentData['home_lng'] = homeLng;
+        }
+
+        await studentRef.set(studentData);
+
+        if (!dialogContext.mounted) return;
+        Navigator.pop(dialogContext);
+        
+        scaffoldMessenger.showSnackBar(
+          SnackBar(content: Text('تم حفظ الطالب بنجاح، المعرف: $displayId'), duration: const Duration(seconds: 5)),
+        );
+      } catch (e) {
+        debugPrint('Add Student Error: $e');
+        scaffoldMessenger.showSnackBar(
+          SnackBar(content: Text('فشل إضافة الطالب: $e')),
+        );
+      }
     }
 
     showDialog(
@@ -694,6 +835,10 @@ class _StudentsScreenState extends State<StudentsScreen> {
                       ),
                     ],
                   ),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.edit_note, color: Color(0xFF1B7C80)),
+                  onPressed: () => _editStudentDialog(student),
                 ),
               ],
             ),

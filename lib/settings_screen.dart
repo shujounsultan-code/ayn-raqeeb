@@ -1,3 +1,4 @@
+import 'role_selection_screen.dart';
 import 'package:flutter/material.dart';
 import 'widgets/back_button_widget.dart';
 import 'login_screen.dart';
@@ -43,7 +44,7 @@ class SettingsScreen extends StatelessWidget {
       onTap: () {
         Navigator.pushAndRemoveUntil(
           context,
-          MaterialPageRoute(builder: (_) => const LoginScreen()),
+          MaterialPageRoute(builder: (_) => const RoleSelectionScreen()),
           (route) => false,
         );
       },
