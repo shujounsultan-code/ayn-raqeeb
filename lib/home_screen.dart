@@ -4,8 +4,10 @@ import 'widgets/back_button_widget.dart';
 import 'students_screen.dart';
 import 'profile_school_screen.dart';
 import 'records_screen.dart';
-import 'buses_page.dart';  
+import 'buses_page.dart';
 import 'drivers_screen.dart';
+import 'School_fees.dart';
+import 'LiveTrackingScreen.dart';
 
 class HomeScreen extends StatelessWidget {
   final String schoolId;
@@ -35,7 +37,7 @@ class HomeScreen extends StatelessWidget {
               borderRadius: BorderRadius.circular(20),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withOpacity(0.04),
+                  color: Colors.black.withValues(alpha: 0.04),
                   blurRadius: 14,
                   offset: const Offset(0, 6),
                 ),
@@ -54,10 +56,7 @@ class HomeScreen extends StatelessWidget {
                 const SizedBox(height: 6),
                 Text(
                   title,
-                  style: const TextStyle(
-                    fontSize: 13,
-                    color: Colors.black54,
-                  ),
+                  style: const TextStyle(fontSize: 13, color: Colors.black54),
                 ),
               ],
             ),
@@ -84,15 +83,12 @@ class HomeScreen extends StatelessWidget {
             borderRadius: BorderRadius.circular(24),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withOpacity(0.04),
+                color: Colors.black.withValues(alpha: 0.04),
                 blurRadius: 18,
                 offset: const Offset(0, 8),
               ),
             ],
-            border: Border.all(
-              color: const Color(0xFFE8EEEE),
-              width: 1,
-            ),
+            border: Border.all(color: const Color(0xFFE8EEEE), width: 1),
           ),
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 16),
@@ -150,13 +146,10 @@ class HomeScreen extends StatelessWidget {
           decoration: BoxDecoration(
             color: Colors.white,
             borderRadius: BorderRadius.circular(20),
-            border: Border.all(
-              color: const Color(0xFFE8EEEE),
-              width: 1,
-            ),
+            border: Border.all(color: const Color(0xFFE8EEEE), width: 1),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withOpacity(0.04),
+                color: Colors.black.withValues(alpha: 0.04),
                 blurRadius: 16,
                 offset: const Offset(0, 8),
               ),
@@ -199,7 +192,9 @@ class HomeScreen extends StatelessWidget {
               ),
               Icon(
                 Icons.chevron_left_rounded,
-                color: onTap == null ? Colors.grey.shade300 : Colors.grey.shade500,
+                color: onTap == null
+                    ? Colors.grey.shade300
+                    : Colors.grey.shade500,
                 size: 28,
               ),
             ],
@@ -254,10 +249,7 @@ class HomeScreen extends StatelessWidget {
       decoration: BoxDecoration(
         color: const Color(0xFFF7FAFA),
         borderRadius: BorderRadius.circular(24),
-        border: Border.all(
-          color: const Color(0xFFE3EFEF),
-          width: 1,
-        ),
+        border: Border.all(color: const Color(0xFFE3EFEF), width: 1),
       ),
       child: Row(
         children: [
@@ -268,10 +260,7 @@ class HomeScreen extends StatelessWidget {
               color: const Color(0xFFE7F6F7),
               borderRadius: BorderRadius.circular(16),
             ),
-            child: Image.asset(
-              'assets/images/logobg.png',
-              fit: BoxFit.contain,
-            ),
+            child: Image.asset('assets/images/logobg.png', fit: BoxFit.contain),
           ),
           const SizedBox(width: 12),
           Expanded(
@@ -289,10 +278,7 @@ class HomeScreen extends StatelessWidget {
                 const SizedBox(height: 4),
                 const Text(
                   'مرحبًا بك في لوحة التحكم',
-                  style: TextStyle(
-                    fontSize: 13,
-                    color: Colors.black54,
-                  ),
+                  style: TextStyle(fontSize: 13, color: Colors.black54),
                 ),
               ],
             ),
@@ -317,14 +303,16 @@ class HomeScreen extends StatelessWidget {
 
   Widget _buildBottomNav(BuildContext context) {
     return Container(
-      margin: const EdgeInsets.only(top: 10),
       padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(24),
+        borderRadius: const BorderRadius.only(
+          topLeft: Radius.circular(24),
+          topRight: Radius.circular(24),
+        ),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.05),
+            color: Colors.black.withValues(alpha: 0.05),
             blurRadius: 18,
             offset: const Offset(0, -4),
           ),
@@ -355,18 +343,12 @@ class HomeScreen extends StatelessWidget {
               Navigator.push(
                 context,
                 MaterialPageRoute(
-                  builder: (_) => RecordsScreen(
-                    schoolId: schoolId,
-                  ),
+                  builder: (_) => RecordsScreen(schoolId: schoolId),
                 ),
               );
             },
           ),
-          _buildBottomItem(
-            Icons.home_rounded,
-            'الرئيسية',
-            selected: true,
-          ),
+          _buildBottomItem(Icons.home_rounded, 'الرئيسية', selected: true),
         ],
       ),
     );
@@ -378,143 +360,147 @@ class HomeScreen extends StatelessWidget {
       textDirection: TextDirection.rtl,
       child: Scaffold(
         backgroundColor: const Color(0xFFF7F9FC),
-        body: Stack(
-          children: [
-            SafeArea(
-              top: false,
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(22, 0, 22, 14),
-                child: SingleChildScrollView(
-                  physics: const BouncingScrollPhysics(),
-                  child: Column(
+        // تعديل 1: نقل الـ BottomNav ليكون ثابتاً في الأسفل عبر خاصية Scaffold الإصلية
+        bottomNavigationBar: _buildBottomNav(context),
+        body: SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(22, 0, 22, 0),
+            child: SingleChildScrollView(
+              physics: const BouncingScrollPhysics(),
+              child: Column(
+                children: [
+                  _buildHeader(),
+                  const SizedBox(height: 18),
+                  Row(
                     children: [
-                      _buildHeader(),
-                      const SizedBox(height: 18),
-                      Row(
-                        children: [
-                          _buildStatCard(
-                            _getCollectionCount(
-                              FirebaseFirestore.instance
-                                  .collection('students')
-                                  .where('school_id', isEqualTo: schoolId),
-                            ),
-                            'الطالبات',
-                          ),
-                          const SizedBox(width: 12),
-                          _buildStatCard(
-                            _getCollectionCount(
-                              FirebaseFirestore.instance
-                                  .collection('buses')
-                                  .where('school_id', isEqualTo: schoolId),
-                            ),
-                            'الباصات',
-                          ),
-                          const SizedBox(width: 12),
-                          _buildStatCard(
-                            _getCollectionCount(
-                              FirebaseFirestore.instance
-                                  .collection('drivers')
-                                  .where('school_id', isEqualTo: schoolId),
-                            ),
-                            'السائقين',
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 18),
-                      Row(
-                        children: [
-                          const Text(
-                            'الخدمات',
-                            style: TextStyle(
-                              fontSize: 23,
-                              fontWeight: FontWeight.bold,
-                              color: Color(0xFF173B3D),
-                            ),
-                          ),
-                          const Spacer(),
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 12,
-                              vertical: 6,
-                            ),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFFEAF7F7),
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            child: const Text(
-                              '5 خدمات',
-                              style: TextStyle(
-                                fontSize: 12,
-                                color: Color(0xFF1B7C80),
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 16),
-                      _buildServiceTile(
-                        context,
-                        'الباصات',
-                        imagePath: 'assets/images/bus.png',
-                        onTap: () => Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => BusesPage(
-                              schoolId: schoolId,
-                            ),
-                          ),
+                      _buildStatCard(
+                        _getCollectionCount(
+                          FirebaseFirestore.instance
+                              .collection('students')
+                              .where('school_id', isEqualTo: schoolId),
                         ),
-                      ),
-                      const SizedBox(height: 14),
-                      _buildServiceTile(
-                        context,
-                        'السائقين',
-                        icon: Icons.person_outline_rounded,
-                        onTap: () => Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => DriversScreen(
-                              schoolId: schoolId,
-                              schoolName: schoolName,
-                            ),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 14),
-                      _buildServiceTile(
-                        context,
                         'الطالبات',
-                        imagePath: 'assets/images/students.png',
-                        onTap: () => Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => StudentsScreen(
-                              schoolId: schoolId,
-                            ),
-                          ),
+                      ),
+                      const SizedBox(width: 12),
+                      _buildStatCard(
+                        _getCollectionCount(
+                          FirebaseFirestore.instance
+                              .collection('buses')
+                              .where('school_id', isEqualTo: schoolId),
                         ),
+                        'الباصات',
                       ),
-                      const SizedBox(height: 14),
-                      _buildServiceTile(
-                        context,
-                        'الرسوم',
-                        imagePath: 'assets/images/fees.png',
+                      const SizedBox(width: 12),
+                      _buildStatCard(
+                        _getCollectionCount(
+                          FirebaseFirestore.instance
+                              .collection('drivers')
+                              .where('school_id', isEqualTo: schoolId),
+                        ),
+                        'السائقين',
                       ),
-                      const SizedBox(height: 14),
-                      _buildServiceTile(
-                        context,
-                        'خريطة التتبع',
-                        imagePath: 'assets/images/map.png',
-                      ),
-                      _buildBottomNav(context),
                     ],
                   ),
-                ),
+                  const SizedBox(height: 18),
+                  Row(
+                    children: [
+                      const Text(
+                        'الخدمات',
+                        style: TextStyle(
+                          fontSize: 23,
+                          fontWeight: FontWeight.bold,
+                          color: Color(0xFF173B3D),
+                        ),
+                      ),
+                      const Spacer(),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 6,
+                        ),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFEAF7F7),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: const Text(
+                          '5 خدمات',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Color(0xFF1B7C80),
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  _buildServiceTile(
+                    context,
+                    'الباصات',
+                    imagePath: 'assets/images/bus.png',
+                    onTap: () => Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => BusesPage(schoolId: schoolId),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                  _buildServiceTile(
+                    context,
+                    'السائقين',
+                    icon: Icons.person_outline_rounded,
+                    onTap: () => Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => DriversScreen(
+                          schoolId: schoolId,
+                          schoolName: schoolName,
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                  _buildServiceTile(
+                    context,
+                    'الطالبات',
+                    imagePath: 'assets/images/students.png',
+                    onTap: () => Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => StudentsScreen(schoolId: schoolId),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                  _buildServiceTile(
+                    context,
+                    'الرسوم',
+                    imagePath: 'assets/images/fees.png',
+                    onTap: () => Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => BusFeesScreen(schoolId: schoolId),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                  _buildServiceTile(
+                    context,
+                    'خريطة التتبع',
+                    imagePath: 'assets/images/map.png',
+                    onTap: () => Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => LiveTrackingScreen(schoolId: schoolId),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 20), 
+                ],
               ),
             ),
-            const BackButtonWidget(),
-          ],
+          ),
         ),
       ),
     );
