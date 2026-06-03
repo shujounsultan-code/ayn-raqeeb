@@ -1,4 +1,6 @@
 import 'dart:async';
+import 'dart:convert';
+import 'package:http/http.dart' as http;
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -77,6 +79,9 @@ class _DashboardPageState extends State<DashboardPage> {
       _trail.removeRange(0, _trail.length - _maxTrailPoints);
     }
 
+    // إرسال الإحداثيات إلى السيرفر المحلي (FastAPI)
+    _sendToLocalBackend(position.latitude, position.longitude);
+
     // إرسال الموقع إلى Firestore
     try {
       await FirebaseFirestore.instance.collection('bus_locations').doc(busDocId).set({
@@ -91,6 +96,28 @@ class _DashboardPageState extends State<DashboardPage> {
       debugPrint('Dashboard: تم إرسال الموقع إلى Firestore');
     } catch (e) {
       debugPrint('Dashboard: خطأ في إرسال الموقع إلى Firestore: $e');
+    }
+  }
+
+  Future<void> _sendToLocalBackend(double lat, double lng) async {
+    try {
+      final url = Uri.parse('http://127.0.0.1:8000/documents/manual-qa');
+      final response = await http.post(
+        url,
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'latitude': lat,
+          'longitude': lng,
+          'timestamp': DateTime.now().toIso8601String(),
+        }),
+      );
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        debugPrint('Dashboard: تم إرسال الموقع بنجاح للسيرفر المحلي');
+      } else {
+        debugPrint('Dashboard: فشل إرسال الموقع للسيرفر المحلي: ${response.statusCode}');
+      }
+    } catch (e) {
+      debugPrint('Dashboard: خطأ في الاتصال بالسيرفر المحلي: $e');
     }
   }
 

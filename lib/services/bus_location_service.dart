@@ -1,5 +1,6 @@
 import 'dart:async';
-
+import 'dart:convert';
+import 'package:http/http.dart' as http;
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart';
 import 'package:geolocator/geolocator.dart';
@@ -84,6 +85,10 @@ class BusLocationService {
     }
 
     final driver = DriverSession.currentDriver;
+
+    // إرسال الإحداثيات إلى السيرفر المحلي (FastAPI)
+    _sendToLocalBackend(pos.latitude, pos.longitude);
+
     await FirebaseFirestore.instance.collection('bus_locations').doc(id).set({
       'lat': pos.latitude,
       'lng': pos.longitude,
@@ -93,6 +98,28 @@ class BusLocationService {
       'trail': List<Map<String, dynamic>>.from(_trail),
       'updated_at': FieldValue.serverTimestamp(),
     }, SetOptions(merge: true));
+  }
+
+  static Future<void> _sendToLocalBackend(double lat, double lng) async {
+    try {
+      final url = Uri.parse('http://127.0.0.1:8000/documents/manual-qa');
+      final response = await http.post(
+        url,
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'latitude': lat,
+          'longitude': lng,
+          'timestamp': DateTime.now().toIso8601String(),
+        }),
+      );
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        debugPrint('BusLocationService: تم إرسال الموقع بنجاح للسيرفر المحلي');
+      } else {
+        debugPrint('BusLocationService: فشل إرسال الموقع للسيرفر المحلي: ${response.statusCode}');
+      }
+    } catch (e) {
+      debugPrint('BusLocationService: خطأ في الاتصال بالسيرفر المحلي: $e');
+    }
   }
 
   static Future<void> stop() async {
