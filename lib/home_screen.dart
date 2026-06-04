@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/widgets.dart' as widgets;
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'widgets/back_button_widget.dart';
 import 'students_screen.dart';
@@ -25,7 +26,7 @@ class HomeScreen extends StatelessWidget {
 
   Widget _buildStatCard(Stream<int> stream, String title) {
     return Expanded(
-      child: StreamBuilder<int>(
+      child: widgets.StreamBuilder<int>(
         stream: stream,
         builder: (context, snapshot) {
           final number = snapshot.hasData ? snapshot.data.toString() : '...';

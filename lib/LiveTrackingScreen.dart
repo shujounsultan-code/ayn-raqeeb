@@ -228,131 +228,113 @@ class _LiveTrackingScreenState extends State<LiveTrackingScreen> {
       child: Scaffold(
         backgroundColor: const Color(0xFFF4F6F8),
         appBar: _buildAppBar(),
-        body: StreamBuilder<QuerySnapshot>(
-          stream: _driversStream,
-          builder: (context, driverSnapshot) {
-            if (driverSnapshot.hasData) {
-              _drivers = {};
-              for (final doc in driverSnapshot.data!.docs) {
-                final data = doc.data() as Map<String, dynamic>;
-                try {
-                  final driver = DriverInfo.fromFirestore(data);
-                  _drivers[driver.busNumber] = driver;
-                } catch (_) {}
-              }
-            }
-            return StreamBuilder<QuerySnapshot>(
-              stream: _busLocationsStream,
-              builder: (context, locSnapshot) {
-                if (locSnapshot.hasData) {
-                  _locations = {};
-                  for (final doc in locSnapshot.data!.docs) {
-                    final data = doc.data() as Map<String, dynamic>;
-                    try {
-                      final loc = BusLocation.fromFirestore(data);
-                      _locations[loc.busNumber] = loc;
-                    } catch (_) {}
-                  }
-                  
-                  // تحديث موقع الخريطة إذا تم تحديد باص معين
-                  if (_selectedBusNumber != null && _locations.containsKey(_selectedBusNumber)) {
-                    final activeLoc = _locations[_selectedBusNumber]!;
-                    WidgetsBinding.instance.addPostFrameCallback((_) {
-                      _mapController.move(LatLng(activeLoc.lat, activeLoc.lng), _mapController.camera.zoom);
-                    });
-                  }
+        body: SingleChildScrollView(
+          physics: const BouncingScrollPhysics(),
+          child: StreamBuilder<QuerySnapshot>(
+            stream: _busLocationsStream,
+            builder: (context, locSnapshot) {
+              if (locSnapshot.hasData) {
+                _locations = {};
+                for (final doc in locSnapshot.data!.docs) {
+                  final data = doc.data() as Map<String, dynamic>;
+                  try {
+                    final loc = BusLocation.fromFirestore(data);
+                    _locations[loc.busNumber] = loc;
+                  } catch (_) {}
                 }
-                return StreamBuilder<QuerySnapshot>(
-                  stream: _busInfoStream,
-                  builder: (context, infoSnapshot) {
-                    if (infoSnapshot.hasData) {
-                      _buses = infoSnapshot.data!.docs
-                          .map((doc) => BusInfo.fromFirestore(doc.id, doc.data() as Map<String, dynamic>))
-                          .toList();
-                    }
-                    return _buildContent();
-                  },
-                );
-              },
-            );
-          },
+                debugPrint('LiveTrackingScreen: Updated _locations with ${_locations.length} buses');
+                
+                // تحديث موقع الخريطة إذا تم تحديد باص معين
+                if (_selectedBusNumber != null && _locations.containsKey(_selectedBusNumber)) {
+                  final activeLoc = _locations[_selectedBusNumber]!;
+                  WidgetsBinding.instance.addPostFrameCallback((_) {
+                    _mapController.move(LatLng(activeLoc.lat, activeLoc.lng), _mapController.camera.zoom);
+                  });
+                }
+              }
+              return StreamBuilder<QuerySnapshot>(
+                stream: _busInfoStream,
+                builder: (context, infoSnapshot) {
+                  if (infoSnapshot.hasData) {
+                    _buses = infoSnapshot.data!.docs
+                        .map((doc) => BusInfo.fromFirestore(doc.id, doc.data() as Map<String, dynamic>))
+                        .toList();
+                    debugPrint('LiveTrackingScreen: Updated _buses with ${_buses.length} buses');
+                  }
+                  return StreamBuilder<QuerySnapshot>(
+                    stream: _driversStream,
+                    builder: (context, driverSnapshot) {
+                      if (driverSnapshot.hasData) {
+                        _drivers = {};
+                        for (final doc in driverSnapshot.data!.docs) {
+                          final data = doc.data() as Map<String, dynamic>;
+                          try {
+                            final driver = DriverInfo.fromFirestore(data);
+                            _drivers[driver.busNumber] = driver;
+                          } catch (_) {}
+                        }
+                        debugPrint('LiveTrackingScreen: Updated _drivers with ${_drivers.length} drivers');
+                      }
+                      return Padding(
+                        padding: const EdgeInsets.only(bottom: 80),
+                        child: _buildContent(),
+                      );
+                    },
+                  );
+                },
+              );
+            },
+          ),
         ),
       ),
     );
   }
-                    try {
-                      final loc = BusLocation.fromFirestore(data);
-                      _locations[loc.busNumber] = loc;
-                    } catch (_) {}
-                  }
-                }
-                return StreamBuilder<QuerySnapshot>(
-                  stream: _busInfoStream,
-                  builder: (context, busSnapshot) {
-                    if (busSnapshot.hasData) {
-                      _buses = busSnapshot.data!.docs.map((doc) {
-                        return BusInfo.fromFirestore(
-                          doc.id,
-                          doc.data() as Map<String, dynamic>,
-                        );
-                      }).toList();
-                    }
-                    return SingleChildScrollView(
-                      physics: const BouncingScrollPhysics(),
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 16,
-                          vertical: 12,
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            _buildMapCard(),
-                            const SizedBox(height: 20),
-                            Row(
-                              children: [
-                                const Text(
-                                  'الباصات المتاحة',
-                                  style: TextStyle(
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.bold,
-                                    color: Color(0xFF173B3D),
-                                  ),
-                                ),
-                                const Spacer(),
-                                Container(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 10,
-                                    vertical: 4,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    color: const Color(0xFFE1F5EE),
-                                    borderRadius: BorderRadius.circular(12),
-                                  ),
-                                  child: Text(
-                                    '${_buses.isNotEmpty ? _buses.length : _locations.length} باص',
-                                    style: const TextStyle(
-                                      fontSize: 12,
-                                      color: Color(0xFF0F6E56),
-                                      fontWeight: FontWeight.w600,
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 12),
-                            _buildBusCards(),
-                            const SizedBox(height: 20),
-                          ],
-                        ),
-                      ),
-                    );
-                  },
-                );
-              },
-            );
-          },
-        ),
+
+  Widget _buildContent() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(
+        horizontal: 16,
+        vertical: 12,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _buildMapCard(),
+          const SizedBox(height: 20),
+          Row(
+            children: [
+              const Text(
+                'الباصات المتاحة',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                  color: Color(0xFF173B3D),
+                ),
+              ),
+              const Spacer(),
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 4,
+                ),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFE1F5EE),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Text(
+                  '${_buses.isNotEmpty ? _buses.length : _locations.length} باص',
+                  style: const TextStyle(
+                    fontSize: 12,
+                    color: Color(0xFF0F6E56),
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          _buildBusCards(),
+        ],
       ),
     );
   }
@@ -389,13 +371,13 @@ class _LiveTrackingScreenState extends State<LiveTrackingScreen> {
           ),
           child: const Row(
             children: [
-              Icon(Icons.circle, color: Color(0xFF1D9E75), size: 8),
+              Icon(Icons.circle, color: Color(0xFF1B7C80), size: 8),
               SizedBox(width: 4),
               Text(
                 'مباشر',
                 style: TextStyle(
                   fontSize: 11,
-                  color: Color(0xFF0F6E56),
+                  color: Color(0xFF1B7C80),
                   fontWeight: FontWeight.w600,
                 ),
               ),
@@ -466,7 +448,7 @@ class _LiveTrackingScreenState extends State<LiveTrackingScreen> {
                     borderRadius: BorderRadius.circular(6),
                     border: Border.all(
                       color: isSelected
-                          ? const Color(0xFF185FA5)
+                          ? const Color(0xFF1B7C80)
                           : Colors.black12,
                       width: 0.5,
                     ),
@@ -484,7 +466,7 @@ class _LiveTrackingScreenState extends State<LiveTrackingScreen> {
                       fontSize: 10,
                       fontWeight: FontWeight.w600,
                       color: isSelected
-                          ? const Color(0xFF185FA5)
+                          ? const Color(0xFF1B7C80)
                           : const Color(0xFF173B3D),
                     ),
                   ),
@@ -496,15 +478,15 @@ class _LiveTrackingScreenState extends State<LiveTrackingScreen> {
                   height: isSelected ? 42 : 36,
                   decoration: BoxDecoration(
                     color: isSelected
-                        ? const Color(0xFF185FA5)
-                        : const Color(0xFF1B7C80),
+                        ? const Color(0xFF1B7C80)
+                        : const Color(0xFF1B7C80).withOpacity(0.7),
                     shape: BoxShape.circle,
                     border: Border.all(color: Colors.white, width: 3),
                     boxShadow: [
                       BoxShadow(
                         color:
                             (isSelected
-                                    ? const Color(0xFF185FA5)
+                                    ? const Color(0xFF1B7C80)
                                     : const Color(0xFF1B7C80))
                                 .withOpacity(0.4),
                         blurRadius: 10,
@@ -611,7 +593,7 @@ class _LiveTrackingScreenState extends State<LiveTrackingScreen> {
   }
 
   Widget _buildBusCards() {
-    if (_buses.isEmpty && _locations.isEmpty) {
+    if (_buses.isEmpty) {
       return const Center(
         child: Padding(
           padding: EdgeInsets.all(30),
@@ -623,9 +605,7 @@ class _LiveTrackingScreenState extends State<LiveTrackingScreen> {
       );
     }
 
-    final items = _buses.isNotEmpty
-        ? _buses.map((b) => _buildBusCard(b)).toList()
-        : _locations.values.map((l) => _buildBusCardFromLocation(l)).toList();
+    final items = _buses.map((b) => _buildBusCard(b)).toList();
 
     return Column(
       children: items
@@ -793,148 +773,6 @@ class _LiveTrackingScreenState extends State<LiveTrackingScreen> {
     );
   }
 
-  Widget _buildBusCardFromLocation(BusLocation loc) {
-    final isSelected = _selectedBusNumber == loc.busNumber;
-    final driver = _drivers[loc.busNumber];
-    final distance = _distanceLabel(loc);
-
-    return GestureDetector(
-      onTap: () => _selectBus(loc.busNumber),
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
-        padding: const EdgeInsets.all(14),
-        decoration: BoxDecoration(
-          color: isSelected ? const Color(0xFFE8F8F3) : Colors.white,
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(
-            color: isSelected
-                ? const Color(0xFF1B7C80)
-                : const Color(0xFFE8EEEE),
-            width: isSelected ? 1.5 : 1,
-          ),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.04),
-              blurRadius: 14,
-              offset: const Offset(0, 4),
-            ),
-          ],
-        ),
-        child: Column(
-          children: [
-            Row(
-              children: [
-                AnimatedContainer(
-                  duration: const Duration(milliseconds: 200),
-                  width: 50,
-                  height: 50,
-                  decoration: BoxDecoration(
-                    color: isSelected
-                        ? const Color(0xFF1B7C80)
-                        : const Color(0xFFEAF7F7),
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                  child: Icon(
-                    Icons.directions_bus_rounded,
-                    color: isSelected ? Colors.white : const Color(0xFF1B7C80),
-                    size: 24,
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'باص ${loc.busNumber}',
-                        style: TextStyle(
-                          fontSize: 15,
-                          fontWeight: FontWeight.w700,
-                          color: isSelected
-                              ? const Color(0xFF1B7C80)
-                              : const Color(0xFF173B3D),
-                        ),
-                      ),
-                      const SizedBox(height: 3),
-                      Row(
-                        children: [
-                          const Icon(
-                            Icons.location_on_rounded,
-                            size: 12,
-                            color: Color(0xFF888780),
-                          ),
-                          const SizedBox(width: 3),
-                          Text(
-                            '${loc.lat.toStringAsFixed(4)}, ${loc.lng.toStringAsFixed(4)}',
-                            style: const TextStyle(
-                              fontSize: 11,
-                              color: Color(0xFF888780),
-                            ),
-                          ),
-                          if (distance != null) ...[
-                            const SizedBox(width: 8),
-                            const Text(
-                              '·',
-                              style: TextStyle(color: Color(0xFF888780)),
-                            ),
-                            const SizedBox(width: 8),
-                            const Icon(
-                              Icons.near_me_rounded,
-                              size: 12,
-                              color: Color(0xFF1B7C80),
-                            ),
-                            const SizedBox(width: 3),
-                            Text(
-                              distance,
-                              style: const TextStyle(
-                                fontSize: 12,
-                                color: Color(0xFF1B7C80),
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ],
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 8,
-                    vertical: 4,
-                  ),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFE1F5EE),
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: const Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(Icons.circle, size: 6, color: Color(0xFF0F6E56)),
-                      const SizedBox(width: 4),
-                      Text(
-                        'نشط',
-                        style: TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w600,
-                          color: Color(0xFF0F6E56),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-            if (driver != null) ...[
-              const SizedBox(height: 12),
-              _buildDriverRow(driver, isSelected, loc),
-            ],
-          ],
-        ),
-      ),
-    );
-  }
-
   Widget _buildDriverRow(DriverInfo driver, bool isSelected, BusLocation? loc) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
@@ -1000,7 +838,7 @@ class _LiveTrackingScreenState extends State<LiveTrackingScreen> {
             IconButton(
               icon: const Icon(
                 Icons.map_rounded,
-                color: Color(0xFF185FA5),
+                color: Color(0xFF1B7C80),
                 size: 20,
               ),
               tooltip: 'الذهاب إلى خرائط Google',

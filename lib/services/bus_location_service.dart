@@ -42,7 +42,7 @@ class BusLocationService {
   }
 
   static Future<bool> start() async {
-    if (kIsWeb || isWindows) {
+    if (kIsWeb) {
       return false;
     }
 

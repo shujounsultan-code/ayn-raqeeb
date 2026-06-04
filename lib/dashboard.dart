@@ -91,7 +91,7 @@ class _DashboardPageState extends State<DashboardPage> {
     });
 
     // التأكد من تشغيل الخدمة الشاملة
-    if (!kIsWeb && !isWindows) {
+    if (!kIsWeb) {
       BusLocationService.start().then((ok) {
         if (!ok && mounted) {
           _showPermissionDeniedDialog();
