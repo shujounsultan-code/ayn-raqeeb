@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../parent_session.dart';
 import 'parent_student_scope.dart';
 import 'parent_login_screen.dart';
+import 'ai_chat_screen.dart';
 
 class AttendanceScreen extends StatefulWidget {
   const AttendanceScreen({super.key});
@@ -154,8 +155,15 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                         child: Row(
                           children: [
                             InkWell(
-                              onTap: () =>
-                                  _showMessage('لا توجد رسائل حالياً'),
+                              onTap: () {
+                                Navigator.push(
+                              context,
+                          MaterialPageRoute(
+                   builder: (context) => const AiChatScreen(),
+                                ),
+                                     );
+                                        },
+                          
                               child: Container(
                                 padding: const EdgeInsets.all(8),
                                 decoration: BoxDecoration(
@@ -169,13 +177,13 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                                     ),
                                   ],
                                 ),
-                                child: const Icon(
-                                  Icons.chat_bubble_outline,
-                                  size: 24,
-                                  color: Colors.black87,
-                                ),
-                              ),
-                            ),
+                              child: const Icon(
+      Icons.chat_bubble_outline,
+      size: 24,
+      color: Colors.black87,
+    ),
+  ),
+),
                             const SizedBox(width: 12),
                             InkWell(
                               onTap: () => _showMessage(
@@ -448,7 +456,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                                 ),
                               ),
                               child: DropdownButtonFormField<String>(
-                                value: effId,
+                                initialValue: effId,
                                 decoration: const InputDecoration(
                                   labelText: 'اختر الطالب',
                                   border: InputBorder.none,
