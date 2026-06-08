@@ -1,9 +1,15 @@
 import 'dart:convert';
+import 'dart:math';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:http/http.dart' as http;
 import 'package:speech_to_text/speech_to_text.dart' as stt;
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter_map/flutter_map.dart';
+import 'package:latlong2/latlong.dart';
 import '../parent_session.dart';
+import 'bus_tracking_screen.dart';
 
 class AiChatScreen extends StatefulWidget {
   const AiChatScreen({super.key});
@@ -33,24 +39,100 @@ class _AiChatScreenState extends State<AiChatScreen> {
     _speech = stt.SpeechToText();
   }
 
+  // ── حساب المسافة بين نقطتين (Haversine Formula) ──
+  double _calcDistance(double lat1, double lon1, double lat2, double lon2) {
+    const R = 6371.0; // نصف قطر الأرض بالكيلومترات
+    final dLat = (lat2 - lat1) * pi / 180;
+    final dLon = (lon2 - lon1) * pi / 180;
+    final a = sin(dLat / 2) * sin(dLat / 2) +
+        cos(lat1 * pi / 180) *
+            cos(lat2 * pi / 180) *
+            sin(dLon / 2) *
+            sin(dLon / 2);
+    final c = 2 * atan2(sqrt(a), sqrt(1 - a));
+    return R * c;
+  }
+
+  // ── بناء context يشمل موقع الباص الحي ──
   Future<String> _buildStudentContext() async {
     final studentName = ParentSession.studentNameOnParent ?? 'الطالب';
     final parentName = ParentSession.parentName ?? 'ولي الأمر';
     final busId = ParentSession.studentBusOnParent ?? 'غير محدد';
+    final schoolId = ParentSession.schoolIdFromParent ?? '';
+    final studentDocId = ParentSession.studentDocId ?? '';
+    final now = DateFormat('yyyy/MM/dd – HH:mm').format(DateTime.now());
+
+    // ── جلب موقع الباص الحي من Firestore ──
+    String busLocationText = 'موقع الباص غير متاح حالياً.';
+    String distanceText = '';
+
+    try {
+      // 1. موقع الباص
+      final busDocId = '${schoolId}_$busId';
+      final busSnap = await FirebaseFirestore.instance
+          .collection('bus_locations')
+          .doc(busDocId)
+          .get();
+
+      if (busSnap.exists && busSnap.data() != null) {
+        final busData = busSnap.data()!;
+        final busLat = (busData['lat'] as num?)?.toDouble();
+        final busLng = (busData['lng'] as num?)?.toDouble();
+        final busSpeed = busData['speed'] ?? 0;
+        final isMoving = busData['is_moving'] ?? false;
+
+        if (busLat != null && busLng != null) {
+          busLocationText =
+              'موقع الباص الحالي: خط العرض $busLat، خط الطول $busLng\n'
+              'سرعة الباص: $busSpeed كم/ساعة\n'
+              'الباص ${isMoving ? "يتحرك" : "واقف"}';
+
+          // 2. موقع بيت الطالب
+          if (studentDocId.isNotEmpty) {
+            final studentSnap = await FirebaseFirestore.instance
+                .collection('students')
+                .doc(studentDocId)
+                .get();
+
+            if (studentSnap.exists && studentSnap.data() != null) {
+              final studentData = studentSnap.data()!;
+              final homeLat = (studentData['home_lat'] as num?)?.toDouble();
+              final homeLng = (studentData['home_lng'] as num?)?.toDouble();
+
+              if (homeLat != null && homeLng != null) {
+                final distKm =
+                    _calcDistance(busLat, busLng, homeLat, homeLng);
+                final distText = distKm < 1
+                    ? '${(distKm * 1000).toStringAsFixed(0)} متر'
+                    : '${distKm.toStringAsFixed(2)} كم';
+                distanceText =
+                    '\nموقع بيت الطالب: خط العرض $homeLat، خط الطول $homeLng'
+                    '\nالمسافة بين الباص والبيت: $distText';
+              }
+            }
+          }
+        }
+      }
+    } catch (e) {
+      // في حال فشل جلب البيانات، نستمر بدونها
+      busLocationText = 'تعذر جلب موقع الباص في الوقت الحالي.';
+    }
 
     return '''
 اسم ولي الأمر: $parentName
 اسم الطالب: $studentName
 رقم الباص: $busId
+الوقت الحالي: $now
+
+$busLocationText$distanceText
 
 تعليمات مهمة:
-•⁠  ⁠أجب بالعربية فقط وبأسلوب واضح ومختصر.
-•⁠  ⁠إذا سأل ولي الأمر عن وقت وصول الباص، قل إن الوقت المتوقع يظهر في صفحة تتبع الباص حسب آخر تحديث للموقع.
-•⁠  ⁠إذا سأل عن موقع الطالب أو الباص، قل إن الموقع يمكن متابعته من صفحة تتبع الباص والخريطة المباشرة داخل التطبيق.
-•⁠  ⁠إذا سأل عن الرسوم، وضح أن الدفع يكون من صفحة الرسوم داخل التطبيق.
-•⁠  ⁠إذا سأل عن الحضور، وضح أنه يمكن معرفة الحالة من صفحة الحضور.
-•⁠  ⁠لا تذكر أسماء أو أرقام هواتف غير موجودة في بيانات الجلسة.
-•⁠  ⁠لا تخترع وقت وصول أو موقع غير موجود.
+• أجب بالعربية فقط وبأسلوب واضح ومختصر.
+• استخدم المعلومات الحية أعلاه للإجابة على أسئلة الموقع والوصول.
+• إذا سأل عن وقت الوصول، اعتمد على المسافة والسرعة الحالية إن توفرت.
+• إذا سأل عن الرسوم، وضح أن الدفع من صفحة الرسوم في التطبيق.
+• إذا سأل عن الحضور، وضح أنه في صفحة الحضور في التطبيق.
+• لا تخترع أرقاماً أو معلومات غير موجودة في البيانات أعلاه.
 ''';
   }
 
@@ -68,22 +150,21 @@ class _AiChatScreenState extends State<AiChatScreen> {
     _scrollToBottom();
 
     try {
-      final context = await _buildStudentContext();
+      final liveContext = await _buildStudentContext();
+
+      // URL يتكيف تلقائياً: ويب → localhost، Android Emulator → 10.0.2.2
+      final baseUrl = kIsWeb ? 'http://localhost:8000' : 'http://10.0.2.2:8000';
 
       final response = await http.post(
-        Uri.parse('http://10.0.2.2:8000/api/v1/ai/chat'),
+        Uri.parse('$baseUrl/api/v1/ai/chat'),
         headers: {
           'Content-Type': 'application/json',
           'X-API-Key': 'aynraqeeb-secret-key-change-this',
         },
         body: jsonEncode({
-          'message': '''
-$context
-
-سؤال ولي الأمر:
-$text
-''',
+          'message': text,
           'user_id': _parentId,
+          'live_context': liveContext,
         }),
       );
 
@@ -97,8 +178,7 @@ $text
             data['reply'] ??
             'لم أستطع فهم الرد.';
       } else {
-        print(response.statusCode);
-        print(response.body);
+        debugPrint('AI ERROR ${response.statusCode}: ${response.body}');
         reply = 'حدث خطأ في الاتصال بالمساعد الذكي.';
       }
 
@@ -109,7 +189,7 @@ $text
         _isTyping = false;
       });
     } catch (e) {
-      print('AI CHAT ERROR: $e');
+      debugPrint('AI CHAT ERROR: $e');
 
       if (!mounted) return;
 
@@ -338,9 +418,9 @@ $text
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
               decoration: BoxDecoration(
-                color: mainColor.withOpacity(0.1),
+                color: mainColor.withValues(alpha: 0.1),
                 borderRadius: BorderRadius.circular(20),
-                border: Border.all(color: mainColor.withOpacity(0.4)),
+                border: Border.all(color: mainColor.withValues(alpha: 0.4)),
               ),
               child: Text(
                 q,
@@ -349,6 +429,111 @@ $text
             ),
           );
         }).toList(),
+      ),
+    );
+  }
+
+  Map<String, double>? _extractCoordinates(String text) {
+    final RegExp regExp = RegExp(r'[+-]?[0-9]+\.[0-9]+');
+    final matches = regExp.allMatches(text).toList();
+    if (matches.length >= 2) {
+      try {
+        double lat = double.parse(matches[0].group(0)!);
+        double lng = double.parse(matches[1].group(0)!);
+        if (lat >= 30 && lat <= 60 && lng >= 15 && lng <= 35) {
+          final temp = lat;
+          lat = lng;
+          lng = temp;
+        }
+        if (lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180) {
+          return {'lat': lat, 'lng': lng};
+        }
+      } catch (e) {
+        // ignore
+      }
+    }
+    return null;
+  }
+
+  Widget _maybeBuildMap(String text) {
+    final coords = _extractCoordinates(text);
+    if (coords == null) return const SizedBox.shrink();
+
+    final double lat = coords['lat']!;
+    final double lng = coords['lng']!;
+    final LatLng position = LatLng(lat, lng);
+
+    return GestureDetector(
+      onTap: () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => const BusTrackingScreen(),
+          ),
+        );
+      },
+      child: Container(
+        margin: const EdgeInsets.only(top: 10),
+        height: 180,
+        width: double.infinity,
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: Colors.grey.shade300),
+        ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(11),
+          child: FlutterMap(
+            options: MapOptions(
+              initialCenter: position,
+              initialZoom: 15,
+              interactionOptions: const InteractionOptions(
+                flags: InteractiveFlag.none,
+              ),
+              onTap: (_, __) {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => const BusTrackingScreen(),
+                  ),
+                );
+              },
+            ),
+            children: [
+              TileLayer(
+                urlTemplate: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+                subdomains: const ['a', 'b', 'c'],
+                userAgentPackageName: 'com.appaynraqeeb.ayn_raqeeb',
+              ),
+              MarkerLayer(
+                markers: [
+                  Marker(
+                    point: position,
+                    width: 45,
+                    height: 45,
+                    child: Container(
+                      decoration: const BoxDecoration(
+                        color: Colors.white,
+                        shape: BoxShape.circle,
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black26,
+                            blurRadius: 4,
+                            offset: Offset(0, 2),
+                          ),
+                        ],
+                      ),
+                      child: const Icon(
+                        Icons.directions_bus,
+                        color: mainColor,
+                        size: 26,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -373,20 +558,27 @@ $text
           ),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.05),
+              color: Colors.black.withValues(alpha: 0.05),
               blurRadius: 6,
               offset: const Offset(0, 2),
             ),
           ],
         ),
-        child: Text(
-          text,
-          textAlign: TextAlign.right,
-          style: TextStyle(
-            fontSize: 14.5,
-            height: 1.5,
-            color: isUser ? Colors.white : const Color(0xFF1A1A1A),
-          ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.end,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              text,
+              textAlign: TextAlign.right,
+              style: TextStyle(
+                fontSize: 14.5,
+                height: 1.5,
+                color: isUser ? Colors.white : const Color(0xFF1A1A1A),
+              ),
+            ),
+            if (!isUser) _maybeBuildMap(text),
+          ],
         ),
       ),
     );
